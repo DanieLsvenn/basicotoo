@@ -27,107 +27,100 @@ const Page = () => {
 
   return (
     <>
+      <Carousel
+        plugins={[autoplay]}
+        className="w-full"
+        onMouseEnter={autoplay.stop}
+        onMouseLeave={autoplay.reset}
+      >
+        <CarouselContent>
+          {[
+            {
+              src: assets.Landing1,
+              alt: "Landing1",
+              title: "Welcome to Our Law Services",
+              description: "Expert legal support for all your needs",
+              buttonText: "Book a Consultation",
+            },
+            {
+              src: assets.Landing2,
+              alt: "Landing2",
+              title: "Trusted Legal Advisors",
+              description: "Guiding you through complex legal matters",
+              buttonText: "Meet Our Team",
+            },
+            {
+              src: assets.Landing3,
+              alt: "Landing3",
+              title: "Your Justice, Our Priority.",
+              description: "Committed to achieving the best outcomes",
+              buttonText: "Learn More",
+            },
+          ].map((slide, index) => (
+            <CarouselItem key={index}>
+              <div className="relative w-full h-[500px]">
+                <Image
+                  src={slide.src}
+                  alt={slide.alt}
+                  className="w-full h-full object-cover"
+                />
+                {/* Overlay Content */}
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 text-white text-center p-4">
+                  <h2 className="text-4xl font-bold mb-4">{slide.title}</h2>
+                  <p className="text-lg mb-6">{slide.description}</p>
+                  <Button className="bg-white text-black hover:bg-white/80">
+                    {slide.buttonText}
+                  </Button>
+                </div>
+              </div>
+            </CarouselItem>
+          ))}
+        </CarouselContent>
+        <CarouselPrevious />
+        <CarouselNext />
+      </Carousel>
+      <section className="w-full">
+        <div className="relative flex h-64 w-full overflow-hidden">
+          {/* Left Triangle */}
+          <div
+            className="flex-1 bg-black/80 text-white flex items-center justify-start p-6"
+            style={{
+              clipPath: "polygon(0 0, 100% 0, 95% 100%, 0 100%)",
+            }}
+          >
+            <div>
+              <h3 className="text-2xl font-bold italic">Legal Consultations</h3>
+              <p className="font-medium italic mb-5">
+                basicotoo is the top choice priority of many leading
+                <br />
+                businesses in various industries and fields.
+              </p>
+              <Library size={50} />
+            </div>
+          </div>
+
+          {/* Right Triangle */}
+          <div
+            className="flex-1 bg-black/80 text-white flex items-center justify-end p-6"
+            style={{
+              clipPath: "polygon(5% 0, 100% 0, 100% 100%, 0 100%)",
+            }}
+          >
+            <div className="flex flex-col items-end text-right">
+              <Users size={50} className="mb-2" />
+              <h3 className="text-2xl font-bold italic">Expert Legal Team</h3>
+              <p className="font-medium italic">
+                We’re here to support your legal needs
+                <br />
+                with precision and care.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
       <MaxWidthWrapper>
         <div className="bg-white text-gray-800">
           {/* Hero Section with Carousel */}
-          <section className="w-full">
-            <Carousel
-              plugins={[autoplay]}
-              className="w-full"
-              onMouseEnter={autoplay.stop}
-              onMouseLeave={autoplay.reset}
-            >
-              <CarouselContent>
-                {[
-                  {
-                    src: assets.Landing1,
-                    alt: "Landing1",
-                    title: "Welcome to Our Law Services",
-                    description: "Expert legal support for all your needs",
-                    buttonText: "Book a Consultation",
-                  },
-                  {
-                    src: assets.Landing2,
-                    alt: "Landing2",
-                    title: "Trusted Legal Advisors",
-                    description: "Guiding you through complex legal matters",
-                    buttonText: "Meet Our Team",
-                  },
-                  {
-                    src: assets.Landing3,
-                    alt: "Landing3",
-                    title: "Your Justice, Our Priority.",
-                    description: "Committed to achieving the best outcomes",
-                    buttonText: "Learn More",
-                  },
-                ].map((slide, index) => (
-                  <CarouselItem key={index}>
-                    <div className="relative w-full h-[500px]">
-                      <Image
-                        src={slide.src}
-                        alt={slide.alt}
-                        className="w-full h-full object-cover"
-                      />
-                      {/* Overlay Content */}
-                      <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 text-white text-center p-4">
-                        <h2 className="text-4xl font-bold mb-4">
-                          {slide.title}
-                        </h2>
-                        <p className="text-lg mb-6">{slide.description}</p>
-                        <Button className="bg-white text-black hover:bg-white/80">
-                          {slide.buttonText}
-                        </Button>
-                      </div>
-                    </div>
-                  </CarouselItem>
-                ))}
-              </CarouselContent>
-              <CarouselPrevious />
-              <CarouselNext />
-            </Carousel>
-
-            <div className="relative flex h-64 w-full overflow-hidden">
-              {/* Left Triangle */}
-              <div
-                className="flex-1 bg-black/80 text-white flex items-center justify-start p-6"
-                style={{
-                  clipPath: "polygon(0 0, 100% 0, 95% 100%, 0 100%)",
-                }}
-              >
-                <div>
-                  <h3 className="text-2xl font-bold italic">
-                    Legal Consultations
-                  </h3>
-                  <p className="font-medium italic mb-5">
-                    basicotoo is the top choice priority of many leading
-                    <br />
-                    businesses in various industries and fields.
-                  </p>
-                  <Library size={50} />
-                </div>
-              </div>
-
-              {/* Right Triangle */}
-              <div
-                className="flex-1 bg-black/80 text-white flex items-center justify-end p-6"
-                style={{
-                  clipPath: "polygon(5% 0, 100% 0, 100% 100%, 0 100%)",
-                }}
-              >
-                <div className="flex flex-col items-end text-right">
-                  <Users size={50} className="mb-2" />
-                  <h3 className="text-2xl font-bold italic">
-                    Expert Legal Team
-                  </h3>
-                  <p className="font-medium italic">
-                    We’re here to support your legal needs
-                    <br />
-                    with precision and care.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </section>
 
           <div className="border-t border-black mt-20 mb-10"></div>
 

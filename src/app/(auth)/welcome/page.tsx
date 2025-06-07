@@ -1,47 +1,36 @@
-// app/welcome/page.tsx
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useUser } from "@clerk/nextjs";
+import { useAuth } from "@/lib/auth-context";
 import { useEffect } from "react";
-import axios from "axios";
 
 const Page = () => {
-  const { user } = useUser();
+  const { user } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    const syncToBackend = async () => {
-      if (!user) return;
+    // Redirect to dashboard after a short delay
+    const timer = setTimeout(() => {
+      router.replace("/dashboard");
+    }, 2000);
 
-      try {
-        // Call your backend register/login API
-        const res = await axios.post("http://localhost:5144/api/register", {
-          accountUsername:
-            user.username || user.emailAddresses[0].emailAddress.split("@")[0],
-          accountPassword: "defaultPassword123", // You might want to handle this better
-          confirmPassword: "defaultPassword123",
-          accountEmail: user.emailAddresses[0].emailAddress,
-          accountFullName: `${user.firstName ?? ""} ${user.lastName ?? ""}`,
-          accountGender: 0, // Default; adjust if needed
-        });
-
-        // Optional: Get profile or token
-        // const profile = await axios.get("http://localhost:5144/api/profile");
-
-        router.replace("/");
-      } catch (err) {
-        console.error("Backend sync failed", err);
-        router.replace("/");
-      }
-    };
-
-    syncToBackend();
-  }, [user]);
+    return () => clearTimeout(timer);
+  }, [router]);
 
   return (
-    <div className="flex items-center justify-center h-screen">
-      <p>Syncing your account...</p>
+    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="text-center">
+        <h1 className="text-3xl font-bold text-gray-900 mb-4">
+          Welcome{user?.name ? `, ${user.name}` : ""}!
+        </h1>
+        <p className="text-gray-600 mb-8">
+          Your account has been successfully created.
+        </p>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+        <p className="text-sm text-gray-500 mt-4">
+          Redirecting to dashboard...
+        </p>
+      </div>
     </div>
   );
 };

@@ -9,6 +9,10 @@ import VIB from "./VIB.png";
 import ACB from "./ACB.png";
 import BIDV from "./BIDV.png";
 import SHB from "./SHB.png";
+import AboutUs from "./AboutUs.png";
+import ContactUs from "./ContactUs.png";
+import OurLawyers from "./OurLawyers.png";
+import Services from "./Services.png";
 
 export const assets = {
   Landing1,
@@ -22,4 +26,8 @@ export const assets = {
   ACB,
   BIDV,
   SHB,
+  AboutUs,
+  ContactUs,
+  OurLawyers,
+  Services,
 };

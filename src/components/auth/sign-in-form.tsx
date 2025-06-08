@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Eye, EyeOff } from "lucide-react";
 
 export function SignInForm() {
-  const [email, setEmail] = useState("");
+  const [userName, setUserName] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
@@ -22,7 +22,8 @@ export function SignInForm() {
     setIsLoading(true);
 
     try {
-      await login(email, password);
+      await login(userName, password);
+      window.location.href = "/";
     } catch (err: any) {
       setError(err.message || "Login failed");
     } finally {
@@ -41,13 +42,13 @@ export function SignInForm() {
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <Label htmlFor="email">Email</Label>
+          <Label htmlFor="userName">User Name</Label>
           <Input
-            id="email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="Enter your email"
+            id="userName"
+            type="userName"
+            value={userName}
+            onChange={(e) => setUserName(e.target.value)}
+            placeholder="Enter your user name"
             required
             className="mt-1"
           />

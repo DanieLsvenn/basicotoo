@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { MaxWidthWrapper } from "./max-width-wrapper";
 import { buttonVariants } from "./ui/button";
-import { ArrowRight, Menu, X, User, LogOut } from "lucide-react";
+import { ArrowRight, Menu, X, User, LogOut, Settings } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 
@@ -13,6 +13,15 @@ export const Navbar = () => {
   const { user, logout, isLoading } = useAuth();
 
   const isLoggedIn = !!user && !isLoading;
+
+  const getInitials = (name: string) => {
+    return name
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2);
+  };
 
   return (
     <nav className="sticky z-[100] h-16 inset-x-0 top-0 w-full border-b border-gray-200 bg-white/80 backdrop-blur-lg transition-all">
@@ -73,6 +82,20 @@ export const Navbar = () => {
                     Contact us
                   </a>
                 </li>
+                {isLoggedIn && (
+                  <>
+                    <li>
+                      <Link href="/dashboard" className="block px-4 py-2">
+                        Dashboard
+                      </Link>
+                    </li>
+                    <li>
+                      <Link href="/profile" className="block px-4 py-2">
+                        Profile
+                      </Link>
+                    </li>
+                  </>
+                )}
               </ul>
             </nav>
           )}
@@ -107,19 +130,49 @@ export const Navbar = () => {
                     className="flex items-center gap-2 p-2 rounded-full hover:bg-gray-100 transition-colors"
                     aria-label="User menu"
                   >
-                    <div className="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center">
-                      <User className="w-4 h-4" />
+                    <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-sm font-semibold">
+                      {user.name ? (
+                        getInitials(user.name)
+                      ) : (
+                        <User className="w-4 h-4" />
+                      )}
                     </div>
                   </button>
 
                   {userMenuOpen && (
-                    <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-md shadow-lg border border-gray-200 py-1 z-50">
-                      <div className="px-4 py-2 border-b border-gray-100">
+                    <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-md shadow-lg border border-gray-200 py-1 z-50">
+                      <div className="px-4 py-3 border-b border-gray-100">
                         <p className="text-sm font-medium text-gray-900">
-                          {user.name}
+                          {user.name || user.fullName}
                         </p>
                         <p className="text-xs text-gray-500">{user.email}</p>
+                        {user.username && (
+                          <p className="text-xs text-gray-400">
+                            @{user.username}
+                          </p>
+                        )}
                       </div>
+
+                      <Link
+                        href="/profile"
+                        onClick={() => setUserMenuOpen(false)}
+                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                      >
+                        <User className="w-4 h-4" />
+                        View Profile
+                      </Link>
+
+                      <Link
+                        href="/profile?tab=settings"
+                        onClick={() => setUserMenuOpen(false)}
+                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                      >
+                        <Settings className="w-4 h-4" />
+                        Settings
+                      </Link>
+
+                      <hr className="my-1" />
+
                       <button
                         onClick={() => {
                           logout();

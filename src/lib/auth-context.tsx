@@ -8,7 +8,7 @@ interface User {
   email: string;
   name: string;
   username: string;
-  accountId?: string;
+  accountId: string;
   fullName?: string;
   gender?: number;
   accountTicketRequest?: number;
@@ -60,7 +60,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      const response = await fetch("http://localhost:5144/api/profile", {
+      // const response = await fetch("http://localhost:5144/api/profile", {
+      const response = await fetch("http://localhost:3001/profile", {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -68,20 +69,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (response.ok) {
         const userData = await response.json();
-        // Map API response to User interface
         const mappedUser: User = {
-          id: userData.accountId || userData.id,
+          id: userData.userId || userData.id,
           email: userData.email,
-          name: userData.fullName || userData.name,
+          name: userData.fullName,
           username: userData.username,
-          accountId: userData.accountId,
+          accountId: userData.userId || userData.id,
           fullName: userData.fullName,
           gender: userData.gender,
-          accountTicketRequest: userData.accountTicketRequest,
         };
         setUser(mappedUser);
       } else {
-        // Token is invalid, remove it
         localStorage.removeItem("authToken");
       }
     } catch (error) {
@@ -97,7 +95,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const token = localStorage.getItem("authToken");
       if (!token) return;
 
-      const response = await fetch("http://localhost:5144/api/profile", {
+      // const response = await fetch("http://localhost:5144/api/profile", {
+      const response = await fetch("http://localhost:3001/profile", {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -124,7 +123,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = async (userName: string, password: string) => {
     try {
-      const response = await fetch("http://localhost:5144/api/login", {
+      // const response = await fetch("http://localhost:5144/api/login", {
+      const response = await fetch("http://localhost:3001/login", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -140,16 +140,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const data = await response.json();
       localStorage.setItem("authToken", data.token);
 
-      // Map login response to User interface
       const mappedUser: User = {
-        id: data.user.accountId || data.user.id,
-        email: data.user.email,
-        name: data.user.fullName || data.user.name,
-        username: data.user.username,
-        accountId: data.user.accountId,
-        fullName: data.user.fullName,
-        gender: data.user.gender,
-        accountTicketRequest: data.user.accountTicketRequest,
+        id: data.data.accountId,
+        email: data.data.email,
+        name: data.data.fullName,
+        username: data.data.username,
+        accountId: data.data.accountId,
+        fullName: data.data.fullName,
+        gender: data.data.gender,
       };
 
       setUser(mappedUser);
@@ -161,7 +159,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const register = async (registerData: RegisterData) => {
     try {
-      const response = await fetch("http://localhost:5144/api/register", {
+      // const response = await fetch("http://localhost:5144/api/register", {
+      const response = await fetch("http://localhost:3001/register", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -208,7 +207,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const token = localStorage.getItem("authToken");
       if (!token) throw new Error("No authentication token");
 
-      const response = await fetch("http://localhost:5144/api/profile", {
+      // const response = await fetch("http://localhost:5144/api/profile", {
+      const response = await fetch("http://localhost:3001/profile", {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",

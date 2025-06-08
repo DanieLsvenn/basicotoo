@@ -95,7 +95,6 @@
         "status": 200,
         "message": "Login successful",
         "data": {
-          "userId": 1,
           "accountId": 1,
           "username": "john_doe",
           "email": "john.doe@gmail.com",
@@ -115,7 +114,6 @@
         "status": 200,
         "message": "Login successful",
         "data": {
-          "userId": 2,
           "accountId": 2,
           "username": "jane_smith",
           "email": "jane.smith@yahoo.com",
@@ -135,7 +133,6 @@
         "status": 200,
         "message": "Login successful",
         "data": {
-          "userId": 3,
           "accountId": 3,
           "username": "minhtri",
           "email": "minhtri@gmail.com",
@@ -216,6 +213,136 @@
       "id": "2628",
       "userName": "john_doe",
       "password": "password123"
+    },
+    {
+      "id": "949e",
+      "username": "john_doe",
+      "password": "password123"
+    },
+    {
+      "id": "633a",
+      "userName": "john_doe",
+      "password": "password123"
+    },
+    {
+      "id": "39df",
+      "userName": "john_doe",
+      "password": "password123"
+    },
+    {
+      "id": "fea4",
+      "userName": "john_doe",
+      "password": "password123"
+    },
+    {
+      "id": "3564",
+      "userName": "john_doe",
+      "password": "password123"
+    },
+    {
+      "id": "7499",
+      "userName": "john_doe",
+      "password": "password123"
+    },
+    {
+      "id": "3c7d",
+      "userName": "john_doe",
+      "password": "password123"
+    },
+    {
+      "id": "210b",
+      "userName": "john_doe",
+      "password": "password123"
+    },
+    {
+      "id": "b8d0",
+      "userName": "john_doe",
+      "password": "password123"
+    },
+    {
+      "id": "08b7",
+      "userName": "john_doe",
+      "password": "password123"
+    },
+    {
+      "id": "2fdf",
+      "userName": "john_doe",
+      "password": "password123"
+    },
+    {
+      "id": "002e",
+      "userName": "john_doe",
+      "password": "password123"
+    },
+    {
+      "id": "6485",
+      "userName": "john_doe",
+      "password": "password123"
+    },
+    {
+      "id": "28e7",
+      "userName": "john_doe",
+      "password": "password123"
+    },
+    {
+      "id": "1ebe",
+      "userName": "john_doe",
+      "password": "password123"
+    },
+    {
+      "id": "f4e6",
+      "userName": "john_doe",
+      "password": "password123"
+    },
+    {
+      "id": "4dc5",
+      "userName": "john_doe",
+      "password": "password123"
+    },
+    {
+      "id": "a591",
+      "userName": "john_doe",
+      "password": "password123"
+    },
+    {
+      "id": "e712",
+      "userName": "john_doe",
+      "password": "password123"
+    },
+    {
+      "id": "0001",
+      "userName": "john_doe",
+      "password": "password123"
+    },
+    {
+      "id": "8e9a",
+      "userName": "john_doe",
+      "password": "password123"
+    },
+    {
+      "id": "eba2",
+      "userName": "john_doe",
+      "password": "password123"
+    },
+    {
+      "id": "9989",
+      "userName": "john_doe",
+      "password": "password123"
+    },
+    {
+      "id": "cbe9",
+      "userName": "john_doe",
+      "password": "password123"
+    },
+    {
+      "id": "c97b",
+      "userName": "john_doe",
+      "password": "password123"
+    },
+    {
+      "id": "f6bc",
+      "userName": "john_doe",
+      "password": "password123"
     }
   ],
   "register": [
@@ -231,7 +358,6 @@
         "status": 200,
         "message": "Registration successful",
         "data": {
-          "userId": 6,
           "accountId": 6,
           "username": "test_user_1",
           "email": "test1@gmail.com",
@@ -253,7 +379,6 @@
         "status": 200,
         "message": "Registration successful",
         "data": {
-          "userId": 7,
           "accountId": 7,
           "username": "test_user_2",
           "email": "test2@yahoo.com",
@@ -313,7 +438,7 @@
   "profile": [
     {
       "id": "1",
-      "userId": 1,
+      "accountId": 1,
       "username": "john_doe",
       "email": "john.doe@gmail.com",
       "fullName": "John Doe",
@@ -339,7 +464,7 @@
     },
     {
       "id": "2",
-      "userId": 2,
+      "accountId": 2,
       "username": "jane_smith",
       "email": "jane.smith@yahoo.com",
       "fullName": "Jane Smith",
@@ -365,7 +490,7 @@
     },
     {
       "id": "3",
-      "userId": 3,
+      "accountId": 3,
       "username": "minhtri",
       "email": "minhtri@gmail.com",
       "fullName": "Minh Tri",
@@ -391,7 +516,7 @@
     },
     {
       "id": "4",
-      "userId": 4,
+      "accountId": 4,
       "username": "alex_nguyen",
       "email": "alex.nguyen@outlook.com",
       "fullName": "Alex Nguyen",
@@ -417,7 +542,7 @@
     },
     {
       "id": "5",
-      "userId": 5,
+      "accountId": 5,
       "username": "emily_chen",
       "email": "emily.chen@hotmail.com",
       "fullName": "Emily Chen",
@@ -443,7 +568,7 @@
     },
     {
       "id": "6",
-      "userId": 10,
+      "accountId": 10,
       "username": "google_user_123",
       "email": "user@gmail.com",
       "fullName": "Google User",
@@ -479,7 +604,6 @@
         "status": 200,
         "message": "Google login successful",
         "data": {
-          "userId": 10,
           "accountId": 10,
           "username": "google_user_123",
           "email": "googleuser1@gmail.com",
@@ -502,7 +626,6 @@
         "status": 200,
         "message": "Google login successful",
         "data": {
-          "userId": 11,
           "accountId": 11,
           "username": "google_user_456",
           "email": "googleuser2@gmail.com",

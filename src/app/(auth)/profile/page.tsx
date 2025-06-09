@@ -74,18 +74,22 @@ export default function ProfilePage() {
 
       if (response.ok) {
         const data = await response.json();
-        setProfile({
-          accountId: data.userId || data.id, // Ensure accountId is set
-          email: data.email,
-          fullName: data.fullName,
-          username: data.username,
-          gender: data.gender,
-          accountTicketRequest: data.accountTicketRequest || 0,
+        setProfile(data);
+        setEditForm({
+          fullName: data.fullName || "",
+          username: data.username || "",
+          email: data.email || "",
+          gender: data.gender || 0,
         });
-        // ... rest of your code
       }
     } catch (error) {
-      // ... error handling
+      console.error("Failed to fetch profile:", error);
+      toast.error("Failed to load profile data", {
+        description: "Please try again later.",
+        onAutoClose: (t) => console.log(`Auto-closed toast: ${t.id}`),
+      });
+    } finally {
+      setIsLoading(false);
     }
   };
 

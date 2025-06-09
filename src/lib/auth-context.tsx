@@ -8,7 +8,7 @@ interface User {
   email: string;
   name: string;
   username: string;
-  accountId: string;
+  accountId?: string;
   fullName?: string;
   gender?: number;
   accountTicketRequest?: number;
@@ -69,22 +69,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (response.ok) {
         const userData = await response.json();
+        // Map API response to User interface
         const mappedUser: User = {
-          id: userData.userId || userData.id,
+          id: userData.accountId || userData.id,
           email: userData.email,
-          name: userData.fullName,
+          name: userData.fullName || userData.name,
           username: userData.username,
-          accountId: userData.userId || userData.id,
+          accountId: userData.accountId,
           fullName: userData.fullName,
           gender: userData.gender,
+          accountTicketRequest: userData.accountTicketRequest,
         };
         setUser(mappedUser);
       } else {
-        localStorage.removeItem("authToken");
+        // Token is invalid, remove it
+        console.warn("Token validation failed, status:", response.status);
       }
     } catch (error) {
-      console.error("Auth check failed:", error);
-      localStorage.removeItem("authToken");
+      console.error("Auth check error:", error);
     } finally {
       setIsLoading(false);
     }
@@ -140,17 +142,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const data = await response.json();
       localStorage.setItem("authToken", data.token);
 
-      const mappedUser: User = {
-        id: data.data.accountId,
-        email: data.data.email,
-        name: data.data.fullName,
-        username: data.data.username,
-        accountId: data.data.accountId,
-        fullName: data.data.fullName,
-        gender: data.data.gender,
-      };
+      // Map login response to User interface
+      // const mappedUser: User = {
+      //   id: data.user.accountId || data.user.id,
+      //   email: data.user.email,
+      //   name: data.user.fullName || data.user.name,
+      //   username: data.user.username,
+      //   accountId: data.user.accountId,
+      //   fullName: data.user.fullName,
+      //   gender: data.user.gender,
+      //   accountTicketRequest: data.user.accountTicketRequest,
+      // };
 
-      setUser(mappedUser);
+      // setUser(mappedUser);
       router.push("/dashboard");
     } catch (error) {
       throw error;

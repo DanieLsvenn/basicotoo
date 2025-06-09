@@ -35,7 +35,7 @@ interface NotificationSettings {
   pushNotifications: boolean;
 }
 
-export default function ProfileSettings() {
+export function ProfileSettings() {
   const { user, logout } = useAuth();
   const [securitySettings, setSecuritySettings] = useState<SecuritySettings>({
     twoFactorEnabled: false,

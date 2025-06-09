@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Cookies from "js-cookie";
 
 interface User {
   id: string;
@@ -53,108 +54,66 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const checkAuth = async () => {
+    const userId = Cookies.get("authToken");
+    if (!userId) {
+      setIsLoading(false);
+      return;
+    }
+
     try {
-      const token = localStorage.getItem("authToken");
-      if (!token) {
-        setIsLoading(false);
-        return;
-      }
+      // const response = await fetch(`http://localhost:3001/accounts/${userId}`);
+      const response = await fetch(`http://localhost:5144/api/profile`);
+      const userData = await response.json();
 
-      // const response = await fetch("http://localhost:5144/api/profile", {
-      const response = await fetch("http://localhost:3001/profile", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      const mappedUser: User = {
+        id: userData.id.toString(),
+        email: userData.accountEmail,
+        name: userData.accountFullName,
+        username: userData.accountUsername,
+        accountId: userData.id.toString(),
+        fullName: userData.accountFullName,
+        gender: userData.accountGender,
+        accountTicketRequest: userData.accountTicketRequest,
+      };
 
-      if (response.ok) {
-        const userData = await response.json();
-        // Map API response to User interface
-        const mappedUser: User = {
-          id: userData.accountId || userData.id,
-          email: userData.email,
-          name: userData.fullName || userData.name,
-          username: userData.username,
-          accountId: userData.accountId,
-          fullName: userData.fullName,
-          gender: userData.gender,
-          accountTicketRequest: userData.accountTicketRequest,
-        };
-        setUser(mappedUser);
-      } else {
-        // Token is invalid, remove it
-        console.warn("Token validation failed, status:", response.status);
-      }
-    } catch (error) {
-      console.error("Auth check error:", error);
+      setUser(mappedUser);
+    } catch (err) {
+      console.error("Failed to fetch user profile", err);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const refreshUser = async () => {
+  const refreshUser = checkAuth;
+
+  const login = async (username: string, password: string) => {
     try {
-      const token = localStorage.getItem("authToken");
-      if (!token) return;
+      // const response = await fetch(
+      //   `http://localhost:3001/accounts?accountUsername=${username}&accountPassword=${password}`
+      // );
+      const response = await fetch(`http://localhost:5144/api/login`);
+      const result = await response.json();
 
-      // const response = await fetch("http://localhost:5144/api/profile", {
-      const response = await fetch("http://localhost:3001/profile", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (response.ok) {
-        const userData = await response.json();
-        const mappedUser: User = {
-          id: userData.accountId || userData.id,
-          email: userData.email,
-          name: userData.fullName || userData.name,
-          username: userData.username,
-          accountId: userData.accountId,
-          fullName: userData.fullName,
-          gender: userData.gender,
-          accountTicketRequest: userData.accountTicketRequest,
-        };
-        setUser(mappedUser);
-      }
-    } catch (error) {
-      console.error("Failed to refresh user data:", error);
-    }
-  };
-
-  const login = async (userName: string, password: string) => {
-    try {
-      // const response = await fetch("http://localhost:5144/api/login", {
-      const response = await fetch("http://localhost:3001/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ userName, password }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || "Login failed");
+      if (result.length === 0) {
+        throw new Error("Invalid username or password");
       }
 
-      const data = await response.json();
-      localStorage.setItem("authToken", data.token);
+      const userData = result[0];
+      const mappedUser: User = {
+        id: userData.id.toString(),
+        email: userData.accountEmail,
+        name: userData.accountFullName,
+        username: userData.accountUsername,
+        accountId: userData.id.toString(),
+        fullName: userData.accountFullName,
+        gender: userData.accountGender,
+        accountTicketRequest: userData.accountTicketRequest,
+      };
 
-      // Map login response to User interface
-      // const mappedUser: User = {
-      //   id: data.user.accountId || data.user.id,
-      //   email: data.user.email,
-      //   name: data.user.fullName || data.user.name,
-      //   username: data.user.username,
-      //   accountId: data.user.accountId,
-      //   fullName: data.user.fullName,
-      //   gender: data.user.gender,
-      //   accountTicketRequest: data.user.accountTicketRequest,
-      // };
+      Cookies.set("authToken", userData.id.toString(), { expires: 7 }); // 7-day session
+      Cookies.set("tokens", userData.accountTicketRequest.toString() || "0");
 
-      // setUser(mappedUser);
+      setUser(mappedUser);
       router.push("/dashboard");
     } catch (error) {
       throw error;
@@ -163,41 +122,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const register = async (registerData: RegisterData) => {
     try {
-      // const response = await fetch("http://localhost:5144/api/register", {
-      const response = await fetch("http://localhost:3001/register", {
+      const newUser = {
+        accountUsername: registerData.username,
+        accountPassword: registerData.password,
+        accountEmail: registerData.email,
+        accountFullName: registerData.fullName,
+        accountGender: 0,
+        accountTicketRequest: 0,
+      };
+
+      // const response = await fetch("http://localhost:3001/accounts", {
+      const response = await fetch(" http://localhost:5144/api/register", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          accountUsername: registerData.username,
-          accountPassword: registerData.password,
-          confirmPassword: registerData.confirmPassword,
-          accountEmail: registerData.email,
-          accountFullName: registerData.fullName,
-          accountGender: 0,
-        }),
+        body: JSON.stringify(newUser),
       });
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || "Registration failed");
-      }
+      const createdUser = await response.json();
 
-      const data = await response.json();
-      localStorage.setItem("authToken", data.token);
+      localStorage.setItem("userId", createdUser.id.toString());
 
-      // Map register response to User interface
       const mappedUser: User = {
-        id: data.user.accountId || data.user.id,
-        email: data.user.email,
-        name: data.user.fullName || data.user.name,
-        username: data.user.username,
-        accountId: data.user.accountId,
-        fullName: data.user.fullName,
-        gender: data.user.gender,
-        accountTicketRequest: data.user.accountTicketRequest,
+        id: createdUser.id.toString(),
+        email: createdUser.accountEmail,
+        name: createdUser.accountFullName,
+        username: createdUser.accountUsername,
+        accountId: createdUser.id.toString(),
+        fullName: createdUser.accountFullName,
+        gender: createdUser.accountGender,
+        accountTicketRequest: createdUser.accountTicketRequest,
       };
+
+      Cookies.set("authToken", createdUser.id.toString(), { expires: 7 }); // 7-day session
+      Cookies.set("tokens", createdUser.accountTicketRequest.toString() || "0");
 
       setUser(mappedUser);
       router.push("/welcome");
@@ -208,41 +167,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const updateProfile = async (profileData: UpdateProfileData) => {
     try {
-      const token = localStorage.getItem("authToken");
-      if (!token) throw new Error("No authentication token");
+      const userId = localStorage.getItem("userId");
+      if (!userId) throw new Error("No user logged in");
 
-      // const response = await fetch("http://localhost:5144/api/profile", {
-      const response = await fetch("http://localhost:3001/profile", {
+      // const response = await fetch(`http://localhost:3001/accounts/${userId}`, {
+      const response = await fetch(`http://localhost:5144/api/profile`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          fullName: profileData.fullName,
-          username: profileData.username,
-          email: profileData.email,
-          gender: profileData.gender,
+          accountUsername: profileData.username,
+          accountEmail: profileData.email,
+          accountFullName: profileData.fullName,
+          accountGender: profileData.gender,
         }),
       });
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || "Profile update failed");
-      }
+      const updated = await response.json();
 
-      const updatedData = await response.json();
-
-      // Map updated response to User interface
       const mappedUser: User = {
-        id: updatedData.accountId || updatedData.id,
-        email: updatedData.email,
-        name: updatedData.fullName || updatedData.name,
-        username: updatedData.username,
-        accountId: updatedData.accountId,
-        fullName: updatedData.fullName,
-        gender: updatedData.gender,
-        accountTicketRequest: updatedData.accountTicketRequest,
+        id: updated.id.toString(),
+        email: updated.accountEmail,
+        name: updated.accountFullName,
+        username: updated.accountUsername,
+        accountId: updated.id.toString(),
+        fullName: updated.accountFullName,
+        gender: updated.accountGender,
+        accountTicketRequest: updated.accountTicketRequest,
       };
 
       setUser(mappedUser);
@@ -252,7 +204,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = () => {
-    localStorage.removeItem("authToken");
+    Cookies.remove("authToken");
+    Cookies.remove("tokens");
     setUser(null);
     router.push("/");
   };

@@ -24,6 +24,7 @@ import {
   Settings,
   Camera,
 } from "lucide-react";
+import Cookies from "js-cookie";
 
 interface UserProfile {
   accountId: string;
@@ -64,13 +65,16 @@ export default function ProfilePage() {
 
   const fetchProfile = async () => {
     try {
-      const token = localStorage.getItem("authToken");
+      const token = Cookies.get("authToken");
       // const response = await fetch("http://localhost:5144/api/profile", {
-      const response = await fetch("http://localhost:3001/profile", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      const response = await fetch(
+        "https://localhost:7218/api/Account/profile",
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
 
       if (response.ok) {
         const data = await response.json();
@@ -106,21 +110,24 @@ export default function ProfilePage() {
   const handleSaveProfile = async () => {
     setSaving(true);
     try {
-      const token = localStorage.getItem("authToken");
+      const token = Cookies.get("authToken");
       // const response = await fetch("http://localhost:5144/api/profile", {
-      const response = await fetch("http://localhost:3001/profile", {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          fullName: editForm.fullName,
-          username: editForm.username,
-          email: editForm.email,
-          gender: editForm.gender,
-        }),
-      });
+      const response = await fetch(
+        "https://localhost:7218/api/Account/profile",
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            fullName: editForm.fullName,
+            username: editForm.username,
+            email: editForm.email,
+            gender: editForm.gender,
+          }),
+        }
+      );
 
       if (response.ok) {
         const updatedProfile = await response.json();

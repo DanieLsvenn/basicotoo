@@ -53,6 +53,27 @@ const services = [
   },
 ];
 
+const documentations = [
+  {
+    name: "Divorce Petition",
+    slug: "divorce-petition",
+    image: "/assets/InHouseLawyerServices.png",
+    description: "A divorce settlement template.",
+  },
+  {
+    name: "Lease Agreement",
+    slug: "lease-agreement",
+    image: "/assets/InHouseLawyerServices.png",
+    description: "Lease agreement template.",
+  },
+  {
+    name: "Last Will and Testament",
+    slug: "last-will-testament",
+    image: "/assets/InHouseLawyerServices.png",
+    description: "Last will and testament template.",
+  },
+];
+
 const Page = () => {
   const autoplay = Autoplay({ delay: 4000, stopOnInteraction: true });
   return (
@@ -95,6 +116,32 @@ const Page = () => {
                 <div className="p-4">
                   <h2 className="text-xl font-semibold mb-2">{service.name}</h2>
                   <p className="text-gray-600 text-sm">{service.description}</p>
+                </div>
+              </Link>
+            ))}
+          </div>
+
+          <h1 className="text-4xl font-bold mb-10 text-center mt-20">
+            Our Documentations
+          </h1>
+          <div className="text-xl italic mb-10 text-center">
+            BASICOTOO provides official documentations for your legal needs.
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+            {documentations.map((doc) => (
+              <Link
+                key={doc.slug}
+                href={`/documents/${doc.slug}`}
+                className="border rounded-lg overflow-hidden hover:shadow-lg transition group"
+              >
+                <img
+                  src={doc.image}
+                  alt={doc.name}
+                  className="h-48 w-full object-cover group-hover:scale-105 transition-transform duration-300"
+                />
+                <div className="p-4">
+                  <h2 className="text-xl font-semibold mb-2">{doc.name}</h2>
+                  <p className="text-gray-600 text-sm">{doc.description}</p>
                 </div>
               </Link>
             ))}

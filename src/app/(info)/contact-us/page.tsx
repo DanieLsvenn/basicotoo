@@ -6,7 +6,7 @@ const page = () => {
   return (
     <section id="contact" className="w-full">
       {/* Hero Banner */}
-      <div className="relative h-64 md:h-80 lg:h-[400px]">
+      <div className="relative h-64 md:h-80 lg:h-[500px]">
         <Image
           src={assets.ContactUs}
           alt="Contact Us"

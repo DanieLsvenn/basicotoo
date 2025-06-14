@@ -6,7 +6,7 @@ import { assets } from "../../../../public/assets/assets";
 const page = () => {
   return (
     <>
-      <div className="relative h-64 md:h-80 lg:h-[400px]">
+      <div className="relative h-64 md:h-80 lg:h-[500px]">
         <Image
           src={assets.AboutUs}
           alt="About Us"

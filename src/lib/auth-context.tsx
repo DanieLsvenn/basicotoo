@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useSession, signIn, signOut } from "next-auth/react";
 import Cookies from "js-cookie";
 
 interface User {
@@ -19,9 +20,13 @@ interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
+  loginWithGoogle: () => Promise<void>;
   register: (data: RegisterData) => Promise<void>;
   logout: () => void;
-  forgotPassword: (email: string) => Promise<void>;
+  // Updated forgot password methods
+  requestPasswordReset: (email: string) => Promise<void>;
+  verifyResetOtp: (email: string, otp: string) => Promise<void>;
+  resetPassword: (email: string, newPassword: string) => Promise<void>;
   updateProfile: (data: UpdateProfileData) => Promise<void>;
   refreshUser: () => Promise<void>;
 }
@@ -32,12 +37,11 @@ interface RegisterData {
   confirmPassword: string;
   fullName: string;
   username: string;
+  gender: number;
 }
 
 interface UpdateProfileData {
   fullName: string;
-  username: string;
-  email: string;
   gender: number;
 }
 
@@ -45,53 +49,91 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const API_BASE_AUTH = "https://localhost:7218/api/Account";
+  const API_BASE_FORGOT_PASSWORD = "https://localhost:7218/api/ForgotPassword";
+  const API_BASE_URL = "https://localhost:7218/api/Account";
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
+  const { data: session, status } = useSession();
 
   useEffect(() => {
     // Check if user is logged in on mount
     checkAuth();
-  }, []);
+  }, [session, status]);
 
   const checkAuth = async () => {
-    const token = Cookies.get("authToken");
-    if (!token) {
-      setIsLoading(false);
+    // Handle NextAuth session
+    if (status === "loading") {
       return;
     }
 
-    try {
-      const response = await fetch(`${API_BASE_AUTH}/profile`, {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+    if (session?.backendToken) {
+      // User is logged in via Google OAuth
+      try {
+        const response = await fetch(`${API_BASE_AUTH}/profile`, {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${session.backendToken}`,
+          },
+        });
 
-      if (!response.ok) {
-        throw new Error("Unauthorized");
+        if (response.ok) {
+          const userData = await response.json();
+          const mappedUser: User = {
+            id: userData.id,
+            email: userData.email,
+            name: userData.fullName,
+            username: userData.username,
+            fullName: userData.fullName,
+            gender: userData.gender,
+            accountTicketRequest: userData.accountTicketRequest,
+          };
+          setUser(mappedUser);
+          Cookies.set("authToken", session.backendToken, { expires: 7 });
+        }
+      } catch (err) {
+        console.error("Failed to fetch user profile from Google session", err);
+      }
+    } else {
+      // Check for regular authentication token
+      const token = Cookies.get("authToken");
+      if (!token) {
+        setIsLoading(false);
+        return;
       }
 
-      const userData = await response.json();
+      try {
+        const response = await fetch(`${API_BASE_AUTH}/profile`, {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
 
-      const mappedUser: User = {
-        id: userData.id,
-        email: userData.email,
-        name: userData.fullName,
-        username: userData.username,
-        fullName: userData.fullName,
-        gender: userData.gender,
-        accountTicketRequest: userData.accountTicketRequest,
-      };
+        if (!response.ok) {
+          throw new Error("Unauthorized");
+        }
 
-      setUser(mappedUser);
-    } catch (err) {
-      console.error("Failed to fetch user profile", err);
-      logout();
-    } finally {
-      setIsLoading(false);
+        const userData = await response.json();
+
+        const mappedUser: User = {
+          id: userData.id,
+          email: userData.email,
+          name: userData.fullName,
+          username: userData.username,
+          fullName: userData.fullName,
+          gender: userData.gender,
+          accountTicketRequest: userData.accountTicketRequest,
+        };
+
+        setUser(mappedUser);
+      } catch (err) {
+        console.error("Failed to fetch user profile", err);
+        logout();
+      }
     }
+
+    setIsLoading(false);
   };
 
   const refreshUser = checkAuth;
@@ -123,14 +165,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const loginWithGoogle = async () => {
+    try {
+      await signIn("google", {
+        callbackUrl: "/dashboard",
+        redirect: true,
+      });
+    } catch (error) {
+      console.error("Google sign-in failed:", error);
+      throw new Error("Google sign-in failed");
+    }
+  };
+
   const register = async (registerData: RegisterData) => {
     try {
       const newUser = {
-        username: registerData.username,
-        password: registerData.password,
+        accountUsername: registerData.username,
+        accountPassword: registerData.password,
         confirmPassword: registerData.confirmPassword,
-        email: registerData.email,
-        fullName: registerData.fullName,
+        accountEmail: registerData.email,
+        accountFullName: registerData.fullName,
+        accountGender: registerData.gender,
       };
 
       const response = await fetch(`${API_BASE_AUTH}/register`, {
@@ -141,12 +196,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         body: JSON.stringify(newUser),
       });
 
+      console.log("Sending to API:", JSON.stringify(newUser));
+
       if (!response.ok) {
         const err = await response.json();
         throw new Error(err.message || "Registration failed");
       }
 
-      router.push("/login");
+      router.push("/sign-in");
     } catch (error) {
       throw error;
     }
@@ -154,65 +211,98 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const updateProfile = async (profileData: UpdateProfileData) => {
     try {
-      const userId = localStorage.getItem("userId");
-      if (!userId) throw new Error("No user logged in");
+      const token = Cookies.get("authToken") || session?.backendToken;
+      if (!token) throw new Error("No user logged in");
 
-      // const response = await fetch(`http://localhost:3001/accounts/${userId}`, {
-      const response = await fetch(`${API_BASE_AUTH}/profile`, {
+      const response = await fetch(`${API_BASE_URL}/Account/profile/update`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          accountUsername: profileData.username,
-          accountEmail: profileData.email,
-          accountFullName: profileData.fullName,
-          accountGender: profileData.gender,
+          fullName: profileData.fullName,
+          gender: profileData.gender,
         }),
       });
 
-      const updated = await response.json();
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.message || "Update failed");
+      }
 
-      const mappedUser: User = {
-        id: updated.id.toString(),
-        email: updated.accountEmail,
-        name: updated.accountFullName,
-        username: updated.accountUsername,
-        accountId: updated.id.toString(),
-        fullName: updated.accountFullName,
-        gender: updated.accountGender,
-        accountTicketRequest: updated.accountTicketRequest,
-      };
-
-      setUser(mappedUser);
+      // Refresh user data after successful update
+      await refreshUser();
     } catch (error) {
       throw error;
     }
   };
 
-  const logout = () => {
+  const logout = async () => {
     Cookies.remove("authToken");
     Cookies.remove("tokens");
     setUser(null);
+
+    // Sign out from NextAuth if user was logged in via Google
+    if (session) {
+      await signOut({ redirect: false });
+    }
+
     router.push("/");
   };
 
-  const forgotPassword = async (email: string) => {
+  // Fixed forgot password methods
+  const requestPasswordReset = async (email: string) => {
     try {
-      const response = await fetch(
-        "http://localhost:5144/api/forgot-password",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ email }),
-        }
-      );
+      const response = await fetch(`${API_BASE_FORGOT_PASSWORD}/request`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email }),
+      });
 
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.message || "Failed to send reset email");
+      }
+    } catch (error) {
+      throw error;
+    }
+  };
+
+  const verifyResetOtp = async (email: string, otp: string) => {
+    try {
+      const response = await fetch(`${API_BASE_FORGOT_PASSWORD}/verify`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email, otp }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Invalid or expired OTP");
+      }
+    } catch (error) {
+      throw error;
+    }
+  };
+
+  const resetPassword = async (email: string, newPassword: string) => {
+    try {
+      const response = await fetch(`${API_BASE_FORGOT_PASSWORD}/reset`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email, newPassword }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Failed to reset password");
       }
     } catch (error) {
       throw error;
@@ -225,9 +315,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user,
         isLoading,
         login,
+        loginWithGoogle,
         register,
         logout,
-        forgotPassword,
+        requestPasswordReset,
+        verifyResetOtp,
+        resetPassword,
         updateProfile,
         refreshUser,
       }}

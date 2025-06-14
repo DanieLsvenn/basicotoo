@@ -57,19 +57,19 @@ const documentations = [
   {
     name: "Divorce Petition",
     slug: "divorce-petition",
-    image: "/assets/InHouseLawyerServices.png",
+    image: "/assets/DivorcePetition.png",
     description: "A divorce settlement template.",
   },
   {
     name: "Lease Agreement",
     slug: "lease-agreement",
-    image: "/assets/InHouseLawyerServices.png",
+    image: "/assets/LeaseAgreement.png",
     description: "Lease agreement template.",
   },
   {
     name: "Last Will and Testament",
     slug: "last-will-testament",
-    image: "/assets/InHouseLawyerServices.png",
+    image: "/assets/LastWillTestament.png",
     description: "Last will and testament template.",
   },
 ];
@@ -78,7 +78,7 @@ const Page = () => {
   const autoplay = Autoplay({ delay: 4000, stopOnInteraction: true });
   return (
     <>
-      <div className="relative h-64 md:h-80 lg:h-[400px]">
+      <div className="relative h-64 md:h-80 lg:h-[500px]">
         <Image
           src={assets.Services}
           alt="Services"

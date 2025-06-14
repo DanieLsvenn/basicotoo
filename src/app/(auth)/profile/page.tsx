@@ -53,8 +53,6 @@ export default function ProfilePage() {
   const [isSaving, setSaving] = useState(false);
   const [editForm, setEditForm] = useState({
     fullName: "",
-    username: "",
-    email: "",
     gender: 0,
   });
 
@@ -66,7 +64,6 @@ export default function ProfilePage() {
   const fetchProfile = async () => {
     try {
       const token = Cookies.get("authToken");
-      // const response = await fetch("http://localhost:5144/api/profile", {
       const response = await fetch(
         "https://localhost:7218/api/Account/profile",
         {
@@ -81,8 +78,6 @@ export default function ProfilePage() {
         setProfile(data);
         setEditForm({
           fullName: data.fullName || "",
-          username: data.username || "",
-          email: data.email || "",
           gender: data.gender || 0,
         });
       }
@@ -111,9 +106,8 @@ export default function ProfilePage() {
     setSaving(true);
     try {
       const token = Cookies.get("authToken");
-      // const response = await fetch("http://localhost:5144/api/profile", {
       const response = await fetch(
-        "https://localhost:7218/api/Account/profile",
+        "https://localhost:7218/api/Account/profile/update",
         {
           method: "PUT",
           headers: {
@@ -122,16 +116,23 @@ export default function ProfilePage() {
           },
           body: JSON.stringify({
             fullName: editForm.fullName,
-            username: editForm.username,
-            email: editForm.email,
             gender: editForm.gender,
           }),
         }
       );
 
       if (response.ok) {
-        const updatedProfile = await response.json();
-        setProfile(updatedProfile);
+        // Update the profile state with the new values
+        setProfile((prev) =>
+          prev
+            ? {
+                ...prev,
+                fullName: editForm.fullName,
+                gender: editForm.gender,
+              }
+            : null
+        );
+
         setIsEditing(false);
         toast.success("Profile updated successfully", {
           onDismiss: (t) => console.log(`User dismissed toast: ${t.id}`),
@@ -152,8 +153,6 @@ export default function ProfilePage() {
   const handleCancelEdit = () => {
     setEditForm({
       fullName: profile?.fullName || "",
-      username: profile?.username || "",
-      email: profile?.email || "",
       gender: profile?.gender || 0,
     });
     setIsEditing(false);
@@ -165,14 +164,14 @@ export default function ProfilePage() {
       .map((n) => n[0])
       .join("")
       .toUpperCase()
-      .slice(0, 2);
+      .slice(0, 1);
   };
 
   const getGenderText = (gender: number) => {
     switch (gender) {
-      case 1:
+      case 0:
         return "Male";
-      case 2:
+      case 1:
         return "Female";
       default:
         return "Not specified";
@@ -392,33 +391,12 @@ export default function ProfilePage() {
 
                   <div className="space-y-2">
                     <Label htmlFor="username">Username</Label>
-                    {isEditing ? (
-                      <Input
-                        id="username"
-                        value={editForm.username}
-                        onChange={(e) =>
-                          setEditForm({ ...editForm, username: e.target.value })
-                        }
-                      />
-                    ) : (
-                      <p className="text-sm py-2">@{profile.username}</p>
-                    )}
+                    <p className="text-sm py-2">@{profile.username}</p>
                   </div>
 
                   <div className="space-y-2">
                     <Label htmlFor="email">Email</Label>
-                    {isEditing ? (
-                      <Input
-                        id="email"
-                        type="email"
-                        value={editForm.email}
-                        onChange={(e) =>
-                          setEditForm({ ...editForm, email: e.target.value })
-                        }
-                      />
-                    ) : (
-                      <p className="text-sm py-2">{profile.email}</p>
-                    )}
+                    <p className="text-sm py-2">{profile.email}</p>
                   </div>
 
                   <div className="space-y-2">
@@ -435,9 +413,8 @@ export default function ProfilePage() {
                         }
                         className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        <option value={0}>Not specified</option>
-                        <option value={1}>Male</option>
-                        <option value={2}>Female</option>
+                        <option value={0}>Male</option>
+                        <option value={1}>Female</option>
                       </select>
                     ) : (
                       <p className="text-sm py-2">

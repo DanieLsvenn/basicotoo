@@ -35,12 +35,12 @@ const navItems = [
   },
   {
     title: "Form Templates",
-    href: "/dashboard/form-templates",
+    href: "/dashboard/forms",
     icon: FileText,
   },
   {
     title: "Ticket Packages",
-    href: "/dashboard/ticket-packages",
+    href: "/dashboard/tickets",
     icon: Package,
   },
 ];

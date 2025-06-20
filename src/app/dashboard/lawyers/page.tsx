@@ -84,37 +84,38 @@ export default function LawyersPage() {
   const [aboutDialogOpen, setAboutDialogOpen] = useState(false);
   const [aboutContent, setAboutContent] = useState<string>("");
   const [serviceError, setServiceError] = useState<string | null>(null);
-  // Fetch both lawyers and services in parallel
-  const fetchData = async () => {
+
+  const fetchLawyers = async () => {
     setLoading(true);
     try {
-      const [lawyersRes, servicesRes] = await Promise.all([
-        fetch(API_LAWYER),
-        fetch(API_SERVICE)
-      ]);
-      
-      const [lawyersData, servicesData] = await Promise.all([
-        lawyersRes.json(),
-        servicesRes.json()
-      ]);
-      
-      setLawyers(lawyersData);
-      setServices(servicesData);
-    } catch (error) {
-      console.error("Error fetching data:", error);
+      const res = await fetch(API_LAWYER);
+      const data = await res.json();
+      setLawyers(data);
     } finally {
       setLoading(false);
     }
-  };  const handleServiceChange = (selected: any[]) => {
+  };
+
+  const fetchServices = async () => {
+    const res = await fetch(API_SERVICE);
+    const data = await res.json();
+    setServices(data);
+  };
+
+  useEffect(() => {
+    fetchLawyers();
+    fetchServices();
+  }, []);
+
+  const handleServiceChange = (selected: any[]) => {
     if (!selected || selected.length === 0) {
       setServiceError("Please select at least one service.");
     } else {
       setServiceError(null);
     }
-    
     setFormData((prev: any) => ({
       ...prev,
-      serviceForLawyerDTOs: selected.map((opt) => {
+      serviceForLawyerDTOs: selected.map((opt: any) => {
         const existing = prev.serviceForLawyerDTOs.find((s: any) => s.serviceId === opt.value);
         return {
           serviceId: opt.value,
@@ -132,10 +133,9 @@ export default function LawyersPage() {
       ),
     }));
   };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Validate that at least one service is selected
     if (!formData.serviceForLawyerDTOs || formData.serviceForLawyerDTOs.length === 0) {
       setServiceError("Please select at least one service.");
       return;
@@ -148,35 +148,32 @@ export default function LawyersPage() {
       : API_LAWYER;
     const payload = editingLawyer
       ? {
-          accountId: editingLawyer.accountId,
-          accountFullName: formData.accountFullName,
-          accountDob: formData.accountDob,
-          accountGender: formData.accountGender,
-          accountPhone: formData.accountPhone,
-          accountImage: formData.accountImage,
-          aboutLawyer: formData.aboutLawyer,
-          serviceForLawyer: formData.serviceForLawyerDTOs,
-        }
+        accountId: editingLawyer.accountId,
+        accountFullName: formData.accountFullName,
+        accountDob: formData.accountDob,
+        accountGender: formData.accountGender,
+        accountPhone: formData.accountPhone,
+        accountImage: formData.accountImage,
+        aboutLawyer: formData.aboutLawyer,
+        serviceForLawyer: formData.serviceForLawyerDTOs,
+      }
       : {
-          ...formData,
-          serviceForLawyer: formData.serviceForLawyerDTOs,
-        };
+        ...formData,
+        serviceForLawyer: formData.serviceForLawyerDTOs,
+      };
 
-    try {
-      await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+    await fetch(url, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
 
-      setFormData(initialFormData);
-      setEditingLawyer(null);
-      setIsDialogOpen(false);
-      fetchData(); // Refresh data
-    } catch (error) {
-      console.error("Error submitting form:", error);
-    }
+    setFormData(initialFormData);
+    setEditingLawyer(null);
+    setIsDialogOpen(false);
+    fetchLawyers();
   };
+
   const handleEdit = (lawyer: Lawyer) => {
     setEditingLawyer(lawyer);
     setFormData({
@@ -191,17 +188,13 @@ export default function LawyersPage() {
     setDeleteTarget(lawyer);
     setDeleteDialogOpen(true);
   };
+
   const confirmDelete = async () => {
     if (!deleteTarget) return;
-    
-    try {
-      await fetch(`${API_LAWYER}/${deleteTarget.accountId}`, { method: "DELETE" });
-      setDeleteDialogOpen(false);
-      setDeleteTarget(null);
-      fetchData(); // Refresh data
-    } catch (error) {
-      console.error("Error deleting lawyer:", error);
-    }
+    await fetch(`${API_LAWYER}/${deleteTarget.accountId}`, { method: "DELETE" });
+    setDeleteDialogOpen(false);
+    setDeleteTarget(null);
+    fetchLawyers();
   };
 
   const filteredLawyers = useMemo(
@@ -221,7 +214,8 @@ export default function LawyersPage() {
           <p className="text-muted-foreground">Manage your law firm's attorney profiles</p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>            <Button onClick={() => {
+          <DialogTrigger asChild>
+            <Button onClick={() => {
               setEditingLawyer(null);
               setFormData(initialFormData);
               setServiceError(null);
@@ -301,23 +295,29 @@ export default function LawyersPage() {
                   options={services
                     .filter(s => s.status === "Active")
                     .map(s => ({
-                      value: s.serviceId,
-                      label: s.serviceName,
-                    }))}
+                    value: s.serviceId,
+                    label: s.serviceName,
+                  }))}
                   value={formData.serviceForLawyerDTOs
                     .filter((s: any) => s.serviceId)
                     .map((s: any) => ({
                       value: s.serviceId,
                       label: services.find(opt => opt.serviceId === s.serviceId)?.serviceName || "",
                     }))
-                  }                  onChange={handleServiceChange}
+                  }
+                  onChange={(selected) =>
+                    setFormData({
+                      ...formData,
+                      serviceForLawyerDTOs: selected.map((opt: any) => ({
+                        serviceId: opt.value,
+                        pricePerHour: 0, // You can customize this if you want to set price per service
+                      })),
+                    })
+                  }
                   placeholder="Please select Services"
                   className="basic-multi-select"
                   classNamePrefix="select"
                 />
-                {serviceError && (
-                  <p className="text-red-600 text-sm mt-1">{serviceError}</p>
-                )}
               </div>
               {/* Individual price fields for each selected service */}
               {formData.serviceForLawyerDTOs
@@ -437,17 +437,16 @@ export default function LawyersPage() {
                         {lawyer.accountGender === 0
                           ? ""
                           : lawyer.accountGender === 1
-                          ? "Male"
-                          : "Female"}
+                            ? "Male"
+                            : "Female"}
                       </td>
                       <td className="p-4">{lawyer.accountPhone}</td>
                       <td className="p-4">
                         <span
-                          className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                            lawyer.accountStatus === "ACTIVE"
+                          className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${lawyer.accountStatus === "ACTIVE"
                               ? "bg-green-100 text-green-700"
                               : "bg-red-100 text-red-700"
-                          }`}
+                            }`}
                         >
                           {lawyer.accountStatus}
                         </span>

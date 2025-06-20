@@ -19,20 +19,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Plus, Edit, Trash2, Search } from "lucide-react";
+import { Plus, Edit, Trash2, Search, Loader2 } from "lucide-react";
+import dynamic from "next/dynamic";
 
 interface Service {
   serviceId: string;
   serviceName: string;
   serviceDescription: string;
+  status: "Active" | "Inactive";
 }
 
 const API_URL = "https://localhost:7218/api/Service";
@@ -145,7 +139,7 @@ export default function ServicesPage() {
               <Plus className="mr-2 h-4 w-4" /> Add Service
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{editingService ? "Edit Service" : "Add New Service"}</DialogTitle>
               <DialogDescription>
@@ -154,9 +148,10 @@ export default function ServicesPage() {
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <Label htmlFor="serviceName">Service Name</Label>
+                <label className="block mb-1 font-medium">Service Name</label>
                 <Input
                   id="serviceName"
+                  placeholder="Please enter Service Name"
                   value={formData.serviceName}
                   onChange={(e) => setFormData({ ...formData, serviceName: e.target.value })}
                   required
@@ -164,9 +159,10 @@ export default function ServicesPage() {
                 />
               </div>
               <div>
-                <Label htmlFor="serviceDescription">Description</Label>
+                <label className="block mb-1 font-medium">Description</label>
                 <Input
                   id="serviceDescription"
+                  placeholder="Please enter Description"
                   value={formData.serviceDescription}
                   onChange={(e) => setFormData({ ...formData, serviceDescription: e.target.value })}
                   required
@@ -195,43 +191,91 @@ export default function ServicesPage() {
           </div>
         </CardHeader>
         <CardContent>
-          {loading ? (
-            <p>Loading...</p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredServices.map((service) => (
-                  <TableRow key={service.serviceId}>
-                    <TableCell className="font-medium">{service.serviceName}</TableCell>
-                    <TableCell>{service.serviceDescription}</TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end space-x-2">
-                        <Button variant="outline" size="sm" onClick={() => handleEdit(service)}>
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleDeleteClick(service)}
-                          className="text-red-600 hover:text-red-700"
-                          aria-label="Delete service"
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="border-b">
+                  <th className="text-left p-4 font-medium">Name</th>
+                  <th className="text-left p-4 font-medium">Description</th>
+                  <th className="text-left p-4 font-medium">Status</th>
+                  <th className="text-right p-4 font-medium">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td colSpan={3} className="text-center py-8">
+                      <Loader2 className="h-6 w-6 animate-spin mx-auto" />
+                      <p className="mt-2 text-sm text-muted-foreground">
+                        Loading services...
+                      </p>
+                    </td>
+                  </tr>
+                ) : filteredServices.length === 0 ? (
+                  <tr>
+                    <td colSpan={3} className="text-center py-8">
+                      <p className="text-sm text-muted-foreground">
+                        No services found
+                      </p>
+                    </td>
+                  </tr>
+                ) : (
+                  filteredServices.map((service) => (
+                    <tr
+                      key={service.serviceId}
+                      className="border-b hover:bg-gray-50"
+                    >
+                      <td className="p-4 font-medium">{service.serviceName}</td>
+                      <td className="p-4">{service.serviceDescription}</td>
+                      <td className="p-4">
+                      <span
+                          className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                            service.status === "Active"
+                              ? "bg-green-100 text-green-700"
+                              : "bg-red-100 text-red-700"
+                          }`}
                         >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
+                          {service.status.toUpperCase()}
+                        </span>
+                        </td>
+                      <td className="p-4 text-right">
+                        <div className="flex justify-end space-x-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleEdit(service)}
+                            disabled={loading}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          {service.status === "Active" ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDeleteClick(service)}
+                            className="text-red-600 hover:text-red-700"
+                            aria-label="Delete service"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                          ) : (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled
+                              className="text-gray-400 cursor-not-allowed"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </CardContent>
       </Card>
 

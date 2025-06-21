@@ -27,7 +27,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import dynamic from "next/dynamic";
-import ReactSelect from "react-select";
+import ReactSelect, { MultiValue, ActionMeta } from "react-select";
 
 interface ServiceOption {
   serviceId: string;
@@ -83,7 +83,7 @@ export default function LawyersPage() {
   const [deleteTarget, setDeleteTarget] = useState<Lawyer | null>(null);
   const [aboutDialogOpen, setAboutDialogOpen] = useState(false);
   const [aboutContent, setAboutContent] = useState<string>("");
-  const [serviceError, setServiceError] = useState<string | null>(null);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
 
   const fetchLawyers = async () => {
     setLoading(true);
@@ -107,24 +107,6 @@ export default function LawyersPage() {
     fetchServices();
   }, []);
 
-  const handleServiceChange = (selected: any[]) => {
-    if (!selected || selected.length === 0) {
-      setServiceError("Please select at least one service.");
-    } else {
-      setServiceError(null);
-    }
-    setFormData((prev: any) => ({
-      ...prev,
-      serviceForLawyerDTOs: selected.map((opt: any) => {
-        const existing = prev.serviceForLawyerDTOs.find((s: any) => s.serviceId === opt.value);
-        return {
-          serviceId: opt.value,
-          pricePerHour: existing ? existing.pricePerHour : 0,
-        };
-      }),
-    }));
-  };
-
   const handlePriceChange = (serviceId: string, price: number) => {
     setFormData((prev: any) => ({
       ...prev,
@@ -134,18 +116,50 @@ export default function LawyersPage() {
     }));
   };
 
+  const handleServiceChange = (
+    selected: MultiValue<ServiceSelectOption>,
+    _actionMeta: ActionMeta<ServiceSelectOption>
+  ) => {
+    setFormData((prev: any) => {
+      const newServiceForLawyerDTOs = (selected as ServiceSelectOption[]).map((opt) => {
+        const existing = prev.serviceForLawyerDTOs.find((s: any) => s.serviceId === opt.value);
+        return {
+          serviceId: opt.value,
+          pricePerHour: existing ? existing.pricePerHour : 0,
+        };
+      });
+      return {
+        ...prev,
+        serviceForLawyerDTOs: newServiceForLawyerDTOs,
+      };
+    });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.serviceForLawyerDTOs || formData.serviceForLawyerDTOs.length === 0) {
-      setServiceError("Please select at least one service.");
-      return;
+    setLoading(true);
+
+    // Password validation for create only
+    if (!editingLawyer) {
+      const password = formData.accountPassword;
+      if (
+        typeof password !== "string" ||
+        password.length < 6 ||
+        password.length > 100
+      ) {
+        setPasswordError("Password must be between 6 and 100 characters.");
+        setLoading(false);
+        return;
+      } else {
+        setPasswordError(null);
+      }
     }
-    setServiceError(null);
 
     const method = editingLawyer ? "PUT" : "POST";
     const url = editingLawyer
       ? `${API_LAWYER}/${editingLawyer.accountId}`
       : API_LAWYER;
+
     const payload = editingLawyer
       ? {
         accountId: editingLawyer.accountId,
@@ -159,8 +173,10 @@ export default function LawyersPage() {
       }
       : {
         ...formData,
-        serviceForLawyer: formData.serviceForLawyerDTOs,
+        serviceForLawyerDTOs: formData.serviceForLawyerDTOs,
       };
+
+    console.log("Submitting data:", payload);
 
     await fetch(url, {
       method,
@@ -171,16 +187,19 @@ export default function LawyersPage() {
     setFormData(initialFormData);
     setEditingLawyer(null);
     setIsDialogOpen(false);
-    fetchLawyers();
+
+    // Wait for fetchLawyers to complete before allowing edit again
+    setLoading(true);
+    await fetchLawyers();
+    setLoading(false);
   };
 
   const handleEdit = (lawyer: Lawyer) => {
     setEditingLawyer(lawyer);
     setFormData({
       ...lawyer,
-      serviceForLawyerDTOs: lawyer.serviceForLawyer || [],
+      serviceForLawyerDTOs: lawyer.serviceForLawyer || [], // always use DTOs in form state
     });
-    setServiceError(null);
     setIsDialogOpen(true);
   };
 
@@ -218,7 +237,6 @@ export default function LawyersPage() {
             <Button onClick={() => {
               setEditingLawyer(null);
               setFormData(initialFormData);
-              setServiceError(null);
             }}>
               <Plus className="mr-2 h-4 w-4" /> Add Lawyer
             </Button>
@@ -290,30 +308,21 @@ export default function LawyersPage() {
               </div>
               <div>
                 <label className="block mb-1 font-medium">Services</label>
-                <ReactSelect
+                <ReactSelect<ServiceSelectOption, true>
                   isMulti
                   options={services
                     .filter(s => s.status === "Active")
                     .map(s => ({
-                    value: s.serviceId,
-                    label: s.serviceName,
-                  }))}
+                      value: s.serviceId,
+                      label: s.serviceName,
+                    }))}
                   value={formData.serviceForLawyerDTOs
-                    .filter((s: any) => s.serviceId)
                     .map((s: any) => ({
                       value: s.serviceId,
                       label: services.find(opt => opt.serviceId === s.serviceId)?.serviceName || "",
                     }))
                   }
-                  onChange={(selected) =>
-                    setFormData({
-                      ...formData,
-                      serviceForLawyerDTOs: selected.map((opt: any) => ({
-                        serviceId: opt.value,
-                        pricePerHour: 0, // You can customize this if you want to set price per service
-                      })),
-                    })
-                  }
+                  onChange={handleServiceChange}
                   placeholder="Please select Services"
                   className="basic-multi-select"
                   classNamePrefix="select"
@@ -321,7 +330,6 @@ export default function LawyersPage() {
               </div>
               {/* Individual price fields for each selected service */}
               {formData.serviceForLawyerDTOs
-                .filter((s: any) => s.serviceId)
                 .map((s: any) => {
                   const serviceName =
                     services.find(opt => opt.serviceId === s.serviceId)?.serviceName || "Service";
@@ -332,7 +340,6 @@ export default function LawyersPage() {
                       </label>
                       <Input
                         type="number"
-                        min={0}
                         placeholder={`Please enter Price Per Hour for ${serviceName}`}
                         value={s.pricePerHour}
                         onChange={e =>
@@ -363,6 +370,9 @@ export default function LawyersPage() {
                       onChange={(e) => setFormData({ ...formData, accountPassword: e.target.value })}
                       required
                     />
+                    {passwordError && (
+                      <label className="text-red-600 text-sm mt-1 block">{passwordError}</label>
+                    )}
                   </div>
                   <div>
                     <label className="block mb-1 font-medium">Email</label>
@@ -376,7 +386,14 @@ export default function LawyersPage() {
                   </div>
                 </>
               )}
-              <Button type="submit">{editingLawyer ? "Update" : "Create"}</Button>
+              {loading ? (
+                <Button type="submit" disabled={loading}>
+                  <Loader2 className="h-6 w-6 animate-spin mx-auto" />
+                  {editingLawyer ? "Update Lawyer" : "Create Lawyer"}
+                </Button>
+              ) : (
+                <Button type="submit">{editingLawyer ? "Update" : "Create"}</Button>
+              )}
             </form>
           </DialogContent>
         </Dialog>
@@ -444,8 +461,8 @@ export default function LawyersPage() {
                       <td className="p-4">
                         <span
                           className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${lawyer.accountStatus === "ACTIVE"
-                              ? "bg-green-100 text-green-700"
-                              : "bg-red-100 text-red-700"
+                            ? "bg-green-100 text-green-700"
+                            : "bg-red-100 text-red-700"
                             }`}
                         >
                           {lawyer.accountStatus}
@@ -543,3 +560,5 @@ export default function LawyersPage() {
     </div>
   );
 }
+
+type ServiceSelectOption = { value: string; label: string };

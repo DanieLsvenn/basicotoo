@@ -14,6 +14,7 @@ interface User {
   fullName?: string;
   gender?: number;
   accountTicketRequest?: number;
+  image?: string; // Add this line
 }
 
 interface AuthContextType {
@@ -87,6 +88,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             fullName: userData.fullName,
             gender: userData.gender,
             accountTicketRequest: userData.accountTicketRequest,
+            image: userData.image || "", // Ensure image is included
           };
           setUser(mappedUser);
           Cookies.set("authToken", session.backendToken, { expires: 7 });
@@ -124,6 +126,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           fullName: userData.fullName,
           gender: userData.gender,
           accountTicketRequest: userData.accountTicketRequest,
+          image: userData.image || "", // Ensure image is included
         };
 
         setUser(mappedUser);

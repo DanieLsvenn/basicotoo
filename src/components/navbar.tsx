@@ -125,6 +125,7 @@ export const Navbar = () => {
                     aria-label="User menu"
                   >
                     <Avatar className="w-8 h-8">
+                      <AvatarImage src={user?.image || ""} alt={user?.name} />
                       <AvatarFallback className="text-xs">
                         {getInitials(user?.name)}
                       </AvatarFallback>

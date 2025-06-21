@@ -33,6 +33,7 @@ interface UserProfile {
   username: string;
   gender: number;
   accountTicketRequest: number;
+  image?: string; // Add this line
   createdAt?: string;
   lastLogin?: string;
 }
@@ -47,6 +48,7 @@ interface ProfileStats {
 export default function ProfilePage() {
   const { user, logout } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [stats, setStats] = useState<ProfileStats | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -100,6 +102,75 @@ export default function ProfilePage() {
       completedBookings: 8,
       memberSince: "January 2024",
     });
+  };
+
+  const handleImageUpload = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select an image file");
+      return;
+    }
+
+    // Validate file size (5MB max)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Image size must be less than 5MB");
+      return;
+    }
+
+    setIsUploadingImage(true);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      // Upload to Cloudinary
+      const uploadResponse = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error("Failed to upload image");
+      }
+
+      const { url } = await uploadResponse.json();
+
+      // Update profile with new image URL
+      const token = Cookies.get("authToken");
+      const updateResponse = await fetch(
+        "https://localhost:7218/api/Account/profile/update",
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            fullName: profile?.fullName,
+            gender: profile?.gender,
+            image: url, // Send the Cloudinary URL
+          }),
+        }
+      );
+
+      if (updateResponse.ok) {
+        // Update local state
+        setProfile((prev) => (prev ? { ...prev, image: url } : null));
+        toast.success("Profile picture updated successfully");
+      } else {
+        throw new Error("Failed to update profile");
+      }
+    } catch (error) {
+      console.error("Failed to upload image:", error);
+      toast.error("Failed to update profile picture");
+    } finally {
+      setIsUploadingImage(false);
+    }
   };
 
   const handleSaveProfile = async () => {
@@ -233,18 +304,38 @@ export default function ProfilePage() {
                 <div className="flex items-center space-x-6">
                   <div className="relative">
                     <Avatar className="h-24 w-24">
-                      <AvatarImage src="" alt={profile.fullName} />
+                      <AvatarImage
+                        src={profile.image || ""}
+                        alt={profile.fullName}
+                      />
                       <AvatarFallback className="text-lg font-semibold">
                         {getInitials(profile.fullName)}
                       </AvatarFallback>
                     </Avatar>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="absolute -bottom-2 -right-2 h-8 w-8 rounded-full p-0"
-                    >
-                      <Camera className="h-4 w-4" />
-                    </Button>
+                    <div className="absolute -bottom-2 -right-2">
+                      <input
+                        type="file"
+                        id="avatar-upload"
+                        accept="image/*"
+                        onChange={handleImageUpload}
+                        className="hidden"
+                      />
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 w-8 rounded-full p-0"
+                        onClick={() =>
+                          document.getElementById("avatar-upload")?.click()
+                        }
+                        disabled={isUploadingImage}
+                      >
+                        {isUploadingImage ? (
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current"></div>
+                        ) : (
+                          <Camera className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
                   </div>
                   <div className="flex-1">
                     <h2 className="text-2xl font-bold">{profile.fullName}</h2>

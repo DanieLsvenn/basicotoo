@@ -14,6 +14,7 @@ import { assets } from "../../../public/assets/assets";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import Autoplay from "embla-carousel-autoplay";
+import { Loader2 } from "lucide-react";
 
 const services = [
   {
@@ -116,7 +117,58 @@ function getServiceImage(serviceName: string) {
   return RANDOM_SERVICE_IMAGES[idx];
 }
 
-const Page = () => {
+// Helper to generate a user-friendly URL slug from the service name
+function getUrl(serviceName: string) {
+  return serviceName
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, "") // Remove non-alphanumeric except space and dash
+    .replace(/\s+/g, "-")         // Replace spaces with dashes
+    .replace(/-+/g, "-")          // Replace multiple dashes with single dash
+    .replace(/^-+|-+$/g, "");     // Trim leading/trailing dashes
+}
+
+function ServiceLink({ service }: { service: Service }) {
+  const [expanded, setExpanded] = useState(false);
+  const maxLength = 80; // Number of characters to show before "Read more"
+  const shortDesc = service.serviceDescription.slice(0, maxLength);
+
+  return (
+    <Link
+      key={service.serviceId}
+      href={`/services/${getUrl(service.serviceName)}`}
+      className="border rounded-lg overflow-hidden hover:shadow-lg transition group"
+    >
+      <div className="relative h-48 w-full">
+        <Image
+          src={getServiceImage(service.serviceName)}
+          alt={service.serviceName}
+          fill
+          className="object-cover group-hover:scale-105 transition-transform duration-300"
+          sizes="(max-width: 768px) 100vw, 33vw"
+        />
+      </div>
+      <div className="p-4">
+        <h2 className="text-xl font-semibold mb-2">{service.serviceName}</h2>
+        <p className="text-gray-600 text-sm">
+          {expanded ? service.serviceDescription : `${shortDesc}... `}
+          <button
+            type="button"
+            className={`text-gray-400 hover:underline hover:text-gray-700 transition-colors duration-500${expanded ? " ml-1" : ""}`}
+            onClick={e => {
+              e.preventDefault();
+              e.stopPropagation();
+              setExpanded(prev => !prev);
+            }}
+          >
+            {expanded ? "Read less" : "Read more"}
+          </button>
+        </p>
+      </div>
+    </Link>
+  );
+}
+
+export default function UserServicesPage() {
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
   const [services, setServices] = useState<Service[]>([]);
@@ -173,23 +225,18 @@ const Page = () => {
             across all areas of core business activities.
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-            {services.map((service) => (
-              <Link
-                key={service.serviceId}
-                href={`/services/${service.serviceId}`}
-                className="border rounded-lg overflow-hidden hover:shadow-lg transition group"
-              >
-                <img
-                  src={getServiceImage(service.serviceName)}
-                  alt={service.serviceName}
-                  className="h-48 w-full object-cover group-hover:scale-105 transition-transform duration-300"
-                />
-                <div className="p-4">
-                  <h2 className="text-xl font-semibold mb-2">{service.serviceName}</h2>
-                  <p className="text-gray-600 text-sm">{service.serviceDescription}</p>
-                </div>
-              </Link>
-            ))}
+            {loading ? (
+              <div className="col-span-full text-center text-gray-500">
+                <Loader2 className="h-6 w-6 animate-spin mx-auto text-gray-400" />
+                Loading services...
+              </div>
+            ) : (
+              services
+                .filter(service => service.status === "Active")
+                .map(service => (
+                  <ServiceLink key={service.serviceId} service={service} />
+                ))
+            )}
           </div>
 
           <h1 className="text-4xl font-bold mb-10 text-center mt-20">
@@ -199,28 +246,37 @@ const Page = () => {
             BASICOTOO provides official documentations for your legal needs.
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-            {documentations.map((doc) => (
-              <Link
-                key={doc.slug}
-                href={`/documents/${doc.slug}`}
-                className="border rounded-lg overflow-hidden hover:shadow-lg transition group"
-              >
-                <img
-                  src={doc.image}
-                  alt={doc.name}
-                  className="h-48 w-full object-cover group-hover:scale-105 transition-transform duration-300"
-                />
-                <div className="p-4">
-                  <h2 className="text-xl font-semibold mb-2">{doc.name}</h2>
-                  <p className="text-gray-600 text-sm">{doc.description}</p>
-                </div>
-              </Link>
-            ))}
+            {loading ? (
+              <div className="col-span-full text-center text-gray-500">
+                <Loader2 className="h-6 w-6 animate-spin mx-auto text-gray-400" />
+                Loading documentations...
+              </div>
+            ) : (
+              documentations.map((doc) => (
+                <Link
+                  key={doc.slug}
+                  href={`/documents/${doc.slug}`}
+                  className="border rounded-lg overflow-hidden hover:shadow-lg transition group"
+                >
+                  <div className="relative h-48 w-full">
+                    <Image
+                      src={doc.image}
+                      alt={doc.name}
+                      fill
+                      className="object-cover group-hover:scale-105 transition-transform duration-300"
+                      sizes="(max-width: 768px) 100vw, 33vw"
+                    />
+                  </div>
+                  <div className="p-4">
+                    <h2 className="text-xl font-semibold mb-2">{doc.name}</h2>
+                    <p className="text-gray-600 text-sm">{doc.description}</p>
+                  </div>
+                </Link>
+              ))
+            )}
           </div>
         </div>
       </MaxWidthWrapper>
     </>
   );
-};
-
-export default Page;
+}

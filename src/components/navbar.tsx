@@ -7,8 +7,12 @@ import { ArrowRight, Menu, X, User, LogOut, Settings } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
+import Dock from "./ui/dock";
+import { useRouter } from "next/navigation";
+import { on } from "events";
 
 export const Navbar = () => {
+  const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const { user, logout, isLoading } = useAuth();
@@ -24,6 +28,17 @@ export const Navbar = () => {
       .slice(0, 2);
   };
 
+  const handleChangePage = (href: string) => {
+    router.push(href);
+  };
+
+  const items = [
+    { name: "Services", onClick: () => handleChangePage("/services") },
+    { name: "About us", onClick: () => handleChangePage("/about-us") },
+    { name: "Our lawyers", onClick: () => handleChangePage("/our-lawyers") },
+    { name: "Contact us", onClick: () => handleChangePage("/contact-us") },
+  ];
+
   return (
     <nav className="sticky z-[100] h-16 inset-x-0 top-0 w-full border-b border-gray-200 bg-white/80 backdrop-blur-lg transition-all">
       <MaxWidthWrapper>
@@ -33,20 +48,25 @@ export const Navbar = () => {
             <span className="text-brand-700 text-slate-400">Too</span>
           </Link>
 
-          <ul className="hidden md:flex items-center gap-6 lg:gap-20 rounded-full px-12 py-3 bg-white/50 shadow-sm dark:border dark:border-white/50 dark:bg-transparent">
-            <li>
-              <a href="/services">Services</a>
-            </li>
-            <li>
-              <a href="/about-us">About us</a>
-            </li>
-            <li>
-              <a href="/our-lawyers">Our lawyers</a>
-            </li>
-            <li>
-              <a href="/contact-us">Contact us</a>
-            </li>
-          </ul>
+          {/* Dock and Buy Ticket in a flex row */}
+          <div className="flex flex-1 items-center gap-3">
+            <Dock
+              className="hidden md:flex flex-auto items-center justify-center mx-4 gap-17 lg:mx-20 lg:gap-30 py-3 bg-white/50 shadow-sm dark:border dark:border-white/50 dark:bg-transparent"
+              items={items}
+              panelHeight={45}
+              baseItemSize={40}
+              magnification={20}
+            />
+            <Link
+              href="/buy-tickets"
+              className={buttonVariants({
+                size: "sm",
+                variant: "ghost",
+              })}
+            >
+              Buy Ticket
+            </Link>
+          </div>
 
           {/* Burger button for mobile */}
           <div className="md:hidden flex justify-end p-4">
@@ -93,16 +113,6 @@ export const Navbar = () => {
               </ul>
             </nav>
           )}
-
-          <Link
-            href="/buy-tickets"
-            className={buttonVariants({
-              size: "sm",
-              variant: "ghost",
-            })}
-          >
-            Buy Ticket
-          </Link>
 
           <div className="h-full flex items-center space-x-4">
             {isLoggedIn ? (

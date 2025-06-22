@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -20,7 +19,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Plus, Edit, Trash2, Search, Loader2 } from "lucide-react";
-import dynamic from "next/dynamic";
 
 interface Service {
   serviceId: string;
@@ -32,19 +30,24 @@ interface Service {
 const API_URL = "https://localhost:7218/api/Service";
 
 export default function ServicesPage() {
-  const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingService, setEditingService] = useState<Service | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  const [services, setServices] = useState<Service[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [formData, setFormData] = useState({
     serviceName: "",
     serviceDescription: "",
   });
+  const [editingService, setEditingService] = useState<Service | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [serviceToDelete, setServiceToDelete] = useState<Service | null>(null);
 
+  // --- LOGIC METHODS ---
+
   const fetchServices = useCallback(async () => {
+    setLoading(true);
     try {
       const res = await fetch(API_URL);
       if (!res.ok) throw new Error("Failed to fetch services");
@@ -57,31 +60,45 @@ export default function ServicesPage() {
     }
   }, []);
 
-  useEffect(() => {
-    fetchServices();
-  }, [fetchServices]);
+  const createService = async (data: { serviceName: string; serviceDescription: string }) => {
+    await fetch(API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+  };
+
+  const updateService = async (service: Service, data: { serviceName: string; serviceDescription: string }) => {
+    await fetch(`${API_URL}/${service.serviceId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ serviceId: service.serviceId, ...data }),
+    });
+  };
+
+  const deleteService = async (service: Service) => {
+    await fetch(`${API_URL}/${service.serviceId}`, { method: "DELETE" });
+  };
+
+  // --- HANDLER METHODS ---
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoading(true);
     try {
-      const method = editingService ? "PUT" : "POST";
-      const url = editingService ? `${API_URL}/${editingService.serviceId}` : API_URL;
-      const body = editingService
-        ? JSON.stringify({ serviceId: editingService.serviceId, ...formData })
-        : JSON.stringify(formData);
-
-      await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body,
-      });
-
+      if (editingService) {
+        await updateService(editingService, formData);
+      } else {
+        await createService(formData);
+      }
       setFormData({ serviceName: "", serviceDescription: "" });
       setEditingService(null);
       setIsDialogOpen(false);
-      fetchServices();
+      setRefreshKey((prev) => prev + 1);
     } catch (err) {
       console.error("Failed to submit service", err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -92,22 +109,27 @@ export default function ServicesPage() {
       serviceDescription: service.serviceDescription,
     });
     setIsDialogOpen(true);
+    setRefreshKey((prev) => prev + 1);
   };
 
   const handleDeleteClick = (service: Service) => {
     setServiceToDelete(service);
     setDeleteDialogOpen(true);
+    setRefreshKey((prev) => prev + 1);
   };
 
-  const confirmDelete = async () => {
+  const handleConfirmDelete = async () => {
     if (!serviceToDelete) return;
+    setLoading(true);
     try {
-      await fetch(`${API_URL}/${serviceToDelete.serviceId}`, { method: "DELETE" });
+      await deleteService(serviceToDelete);
       setDeleteDialogOpen(false);
       setServiceToDelete(null);
-      fetchServices();
+      setRefreshKey((prev) => prev + 1);
     } catch (err) {
       console.error("Failed to delete service", err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -116,15 +138,24 @@ export default function ServicesPage() {
     setEditingService(null);
   };
 
+  // --- EFFECTS ---
+
+  useEffect(() => {
+    fetchServices();
+  }, [refreshKey]);
+
+  // --- MEMOIZED FILTER ---
+
   const filteredServices = useMemo(
     () =>
       services.filter(
         (service) =>
-          service.serviceName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          service.serviceDescription.toLowerCase().includes(searchTerm.toLowerCase())
+          service.serviceName.toLowerCase().includes(searchTerm.toLowerCase())
       ),
     [services, searchTerm]
   );
+
+  // --- RENDER ---
 
   return (
     <div className="space-y-6">
@@ -168,9 +199,14 @@ export default function ServicesPage() {
                   required
                 />
               </div>
-              <Button type="submit" className="w-full">
-                {editingService ? "Update Service" : "Add Service"}
-              </Button>
+              {loading ? (
+                <Button type="submit" disabled={loading}>
+                  <Loader2 className="h-6 w-6 animate-spin mx-auto" />
+                  {editingService ? "Update Service" : "Add Service"}
+                </Button>
+              ) : (
+                <Button type="submit">{editingService ? "Update Service" : "Add Service"}</Button>
+              )}
             </form>
           </DialogContent>
         </Dialog>
@@ -204,7 +240,7 @@ export default function ServicesPage() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={3} className="text-center py-8">
+                    <td colSpan={4} className="text-center py-8">
                       <Loader2 className="h-6 w-6 animate-spin mx-auto" />
                       <p className="mt-2 text-sm text-muted-foreground">
                         Loading services...
@@ -213,7 +249,7 @@ export default function ServicesPage() {
                   </tr>
                 ) : filteredServices.length === 0 ? (
                   <tr>
-                    <td colSpan={3} className="text-center py-8">
+                    <td colSpan={4} className="text-center py-8">
                       <p className="text-sm text-muted-foreground">
                         No services found
                       </p>
@@ -228,16 +264,15 @@ export default function ServicesPage() {
                       <td className="p-4 font-medium">{service.serviceName}</td>
                       <td className="p-4">{service.serviceDescription}</td>
                       <td className="p-4">
-                      <span
-                          className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                            service.status === "Active"
-                              ? "bg-green-100 text-green-700"
-                              : "bg-red-100 text-red-700"
-                          }`}
+                        <span
+                          className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${service.status === "Active"
+                            ? "bg-green-100 text-green-700"
+                            : "bg-red-100 text-red-700"
+                            }`}
                         >
                           {service.status.toUpperCase()}
                         </span>
-                        </td>
+                      </td>
                       <td className="p-4 text-right">
                         <div className="flex justify-end space-x-2">
                           <Button
@@ -249,15 +284,15 @@ export default function ServicesPage() {
                             <Edit className="h-4 w-4" />
                           </Button>
                           {service.status === "Active" ? (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleDeleteClick(service)}
-                            className="text-red-600 hover:text-red-700"
-                            aria-label="Delete service"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleDeleteClick(service)}
+                              className="text-red-600 hover:text-red-700"
+                              aria-label="Delete service"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
                           ) : (
                             <Button
                               variant="outline"
@@ -293,7 +328,7 @@ export default function ServicesPage() {
             <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
               Cancel
             </Button>
-            <Button variant="destructive" onClick={confirmDelete}>
+            <Button variant="destructive" onClick={handleConfirmDelete}>
               Delete
             </Button>
           </div>

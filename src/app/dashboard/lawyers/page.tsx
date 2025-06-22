@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -84,8 +84,12 @@ export default function LawyersPage() {
   const [aboutDialogOpen, setAboutDialogOpen] = useState(false);
   const [aboutContent, setAboutContent] = useState<string>("");
   const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
-  const fetchLawyers = async () => {
+  // --- LOGIC METHODS ---
+
+  // Fetch all lawyers
+  const fetchLawyers = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch(API_LAWYER);
@@ -94,20 +98,35 @@ export default function LawyersPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const fetchServices = async () => {
+  // Fetch all services
+  const fetchServices = useCallback(async () => {
     const res = await fetch(API_SERVICE);
     const data = await res.json();
     setServices(data);
-  };
-
-  useEffect(() => {
-    fetchLawyers();
-    fetchServices();
   }, []);
 
-  const handlePriceChange = (serviceId: string, price: number) => {
+  // Delete a lawyer (logic)
+  const deleteLawyer = async (lawyer: Lawyer) => {
+    await fetch(`${API_LAWYER}/${lawyer.accountId}`, { method: "DELETE" });
+    setDeleteDialogOpen(false);
+    setDeleteTarget(null);
+    await fetchLawyers();
+  };
+
+  // Edit a lawyer (logic)
+  const editLawyer = (lawyer: Lawyer) => {
+    setEditingLawyer(lawyer);
+    setFormData({
+      ...lawyer,
+      serviceForLawyerDTOs: lawyer.serviceForLawyer || [],
+    });
+    setIsDialogOpen(true);
+  };
+
+  // Update price for a service (logic)
+  const updateServicePrice = (serviceId: string, price: number) => {
     setFormData((prev: any) => ({
       ...prev,
       serviceForLawyerDTOs: prev.serviceForLawyerDTOs.map((s: any) =>
@@ -116,7 +135,8 @@ export default function LawyersPage() {
     }));
   };
 
-  const handleServiceChange = (
+  // Update selected services (logic)
+  const updateSelectedServices = (
     selected: MultiValue<ServiceSelectOption>,
     _actionMeta: ActionMeta<ServiceSelectOption>
   ) => {
@@ -135,10 +155,8 @@ export default function LawyersPage() {
     });
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-
+  // Submit form (logic)
+  const submitLawyerForm = async () => {
     // Password validation for create only
     if (!editingLawyer) {
       const password = formData.accountPassword;
@@ -149,7 +167,7 @@ export default function LawyersPage() {
       ) {
         setPasswordError("Password must be between 6 and 100 characters.");
         setLoading(false);
-        return;
+        return false;
       } else {
         setPasswordError(null);
       }
@@ -176,8 +194,6 @@ export default function LawyersPage() {
         serviceForLawyerDTOs: formData.serviceForLawyerDTOs,
       };
 
-    console.log("Submitting data:", payload);
-
     await fetch(url, {
       method,
       headers: { "Content-Type": "application/json" },
@@ -188,33 +204,54 @@ export default function LawyersPage() {
     setEditingLawyer(null);
     setIsDialogOpen(false);
 
-    // Wait for fetchLawyers to complete before allowing edit again
     setLoading(true);
     await fetchLawyers();
     setLoading(false);
+    return true;
+  };
+
+  // --- HANDLER METHODS ---
+
+  const handleDelete = (lawyer: Lawyer) => {
+    setDeleteTarget(lawyer);
+    setDeleteDialogOpen(true);
+    setRefreshKey(prev => prev + 1); // Trigger refresh
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    await deleteLawyer(deleteTarget);
+    setRefreshKey(prev => prev + 1); // Trigger refresh after delete
   };
 
   const handleEdit = (lawyer: Lawyer) => {
-    setEditingLawyer(lawyer);
-    setFormData({
-      ...lawyer,
-      serviceForLawyerDTOs: lawyer.serviceForLawyer || [], // always use DTOs in form state
-    });
-    setIsDialogOpen(true);
+    editLawyer(lawyer);
+    setRefreshKey(prev => prev + 1); // Trigger refresh
   };
 
-  const handleDeleteClick = (lawyer: Lawyer) => {
-    setDeleteTarget(lawyer);
-    setDeleteDialogOpen(true);
+  const handlePriceChange = (serviceId: string, price: number) => {
+    updateServicePrice(serviceId, price);
   };
 
-  const confirmDelete = async () => {
-    if (!deleteTarget) return;
-    await fetch(`${API_LAWYER}/${deleteTarget.accountId}`, { method: "DELETE" });
-    setDeleteDialogOpen(false);
-    setDeleteTarget(null);
+  const handleServiceChange = (
+    selected: MultiValue<ServiceSelectOption>,
+    actionMeta: ActionMeta<ServiceSelectOption>
+  ) => {
+    updateSelectedServices(selected, actionMeta);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    await submitLawyerForm();
+    setLoading(false);
+    setRefreshKey(prev => prev + 1); // Trigger refresh after submit
+  };
+
+  useEffect(() => {
     fetchLawyers();
-  };
+    fetchServices();
+  }, [refreshKey]); // <-- Now useEffect depends on refreshKey
 
   const filteredLawyers = useMemo(
     () =>
@@ -389,10 +426,10 @@ export default function LawyersPage() {
               {loading ? (
                 <Button type="submit" disabled={loading}>
                   <Loader2 className="h-6 w-6 animate-spin mx-auto" />
-                  {editingLawyer ? "Update Lawyer" : "Create Lawyer"}
+                  {editingLawyer ? "Update Lawyer" : "Add Lawyer"}
                 </Button>
               ) : (
-                <Button type="submit">{editingLawyer ? "Update" : "Create"}</Button>
+                <Button type="submit">{editingLawyer ? "Update Lawyer" : "Add Lawyer"}</Button>
               )}
             </form>
           </DialogContent>
@@ -494,7 +531,7 @@ export default function LawyersPage() {
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => handleDeleteClick(lawyer)}
+                              onClick={() => handleDelete(lawyer)}
                               className="text-red-600 hover:text-red-700"
                               disabled={loading}
                             >
@@ -551,7 +588,7 @@ export default function LawyersPage() {
             <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
               Cancel
             </Button>
-            <Button variant="destructive" onClick={confirmDelete}>
+            <Button variant="destructive" onClick={handleConfirmDelete}>
               Delete
             </Button>
           </div>

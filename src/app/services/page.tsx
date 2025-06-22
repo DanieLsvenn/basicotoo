@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { MaxWidthWrapper } from "@/components/max-width-wrapper";
 import {
   Carousel,
@@ -74,8 +75,78 @@ const documentations = [
   },
 ];
 
+interface Service {
+  serviceId: string;
+  serviceName: string;
+  serviceDescription: string;
+  status: "Active" | "Inactive";
+}
+
+const API_URL = "https://localhost:7218/api/Service";
+
+// Fixed image mapping for service types
+const SERVICE_IMAGE_MAP: { keyword: string; image: string }[] = [
+  { keyword: "In-house", image: "/assets/InHouseLawyerServices.png" },
+  { keyword: "Taxes", image: "/assets/TaxesCorporateFinance.png" },
+  { keyword: "Corporate Finance", image: "/assets/TaxesCorporateFinance.png" },
+  { keyword: "Intellectual Property", image: "/assets/IntellectualProperty.png" },
+  { keyword: "Corporate Legal", image: "/assets/CorporateLegalServices.png" },
+  { keyword: "Banking", image: "/assets/BankingFinance.png" },
+  { keyword: "Finance", image: "/assets/BankingFinance.png" },
+  { keyword: "Insurance", image: "/assets/Insurance.png" },
+];
+
+// Fallback random images
+const RANDOM_SERVICE_IMAGES = [
+  "/assets/ServiceImagePool/1.png",
+  "/assets/ServiceImagePool/2.png",
+  "/assets/ServiceImagePool/3.png",
+  "/assets/ServiceImagePool/4.png",
+];
+
+// Helper to get image for a service name
+function getServiceImage(serviceName: string) {
+  for (const { keyword, image } of SERVICE_IMAGE_MAP) {
+    if (serviceName.toLowerCase().includes(keyword.toLowerCase())) {
+      return image;
+    }
+  }
+  // If no keyword matched, pick a random fallback image
+  const idx = Math.floor(Math.random() * RANDOM_SERVICE_IMAGES.length);
+  return RANDOM_SERVICE_IMAGES[idx];
+}
+
 const Page = () => {
+  const [loading, setLoading] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [services, setServices] = useState<Service[]>([]);
+
   const autoplay = Autoplay({ delay: 4000, stopOnInteraction: true });
+
+  // --- LOGIC METHODS ---
+
+  const fetchServices = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(API_URL);
+      if (!res.ok) throw new Error("Failed to fetch services");
+      const data = await res.json();
+      setServices(data);
+    } catch (err) {
+      console.error("Failed to fetch services", err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // --- EFFECTS ---
+
+  useEffect(() => {
+    fetchServices();
+  }, [fetchServices]);
+
+  // --- RENDER ---
+
   return (
     <>
       <div className="relative h-64 md:h-80 lg:h-[500px]">
@@ -104,18 +175,18 @@ const Page = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
             {services.map((service) => (
               <Link
-                key={service.slug}
-                href={`/services/${service.slug}`}
+                key={service.serviceId}
+                href={`/services/${service.serviceId}`}
                 className="border rounded-lg overflow-hidden hover:shadow-lg transition group"
               >
                 <img
-                  src={service.image}
-                  alt={service.name}
+                  src={getServiceImage(service.serviceName)}
+                  alt={service.serviceName}
                   className="h-48 w-full object-cover group-hover:scale-105 transition-transform duration-300"
                 />
                 <div className="p-4">
-                  <h2 className="text-xl font-semibold mb-2">{service.name}</h2>
-                  <p className="text-gray-600 text-sm">{service.description}</p>
+                  <h2 className="text-xl font-semibold mb-2">{service.serviceName}</h2>
+                  <p className="text-gray-600 text-sm">{service.serviceDescription}</p>
                 </div>
               </Link>
             ))}

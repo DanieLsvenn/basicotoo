@@ -1,59 +1,13 @@
+//src/app/services/page.tsx
+
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { MaxWidthWrapper } from "@/components/max-width-wrapper";
-import {
-  Carousel,
-  CarouselContent,
-  CarouselItem,
-  CarouselNext,
-  CarouselPrevious,
-} from "@/components/ui/carousel";
 import Link from "next/link";
 import { assets } from "../../../public/assets/assets";
 import Image from "next/image";
-import { Button } from "@/components/ui/button";
-import Autoplay from "embla-carousel-autoplay";
 import { Loader2 } from "lucide-react";
-
-const services = [
-  {
-    name: "In-house Lawyer Services",
-    slug: "in-house-lawyer-services",
-    image: "/assets/InHouseLawyerServices.png",
-    description: "Expert advice from top-tier legal professionals.",
-  },
-  {
-    name: "Taxes, Corporate Finance",
-    slug: "taxes-corporate-finance",
-    image: "/assets/TaxesCorporateFinance.png",
-    description: "Ensure your contracts are legally sound and risk-free.",
-  },
-  {
-    name: "Intellectual property",
-    slug: "intellectual-property",
-    image: "/assets/IntellectualProperty.png",
-    description: "Manage all your legal cases in one secure dashboard.",
-  },
-  {
-    name: "Corporate Legal Services",
-    slug: "corporate-legal-services",
-    image: "/assets/CorporateLegalServices.png",
-    description: "Custom legal documents drafted by experts.",
-  },
-  {
-    name: "Banking and finance",
-    slug: "banking-finance",
-    image: "/assets/BankingFinance.png",
-    description: "Book appointments with qualified lawyers easily.",
-  },
-  {
-    name: "Insurance",
-    slug: "insurance",
-    image: "/assets/Insurance.png",
-    description: "Stay on top of legal obligations for your business.",
-  },
-];
 
 const documentations = [
   {
@@ -106,7 +60,7 @@ const RANDOM_SERVICE_IMAGES = [
 ];
 
 // Helper to get image for a service name
-function getServiceImage(serviceName: string) {
+function getServiceImage(serviceName: string): string {
   for (const { keyword, image } of SERVICE_IMAGE_MAP) {
     if (serviceName.toLowerCase().includes(keyword.toLowerCase())) {
       return image;
@@ -118,7 +72,7 @@ function getServiceImage(serviceName: string) {
 }
 
 // Helper to generate a user-friendly URL slug from the service name
-function getUrl(serviceName: string) {
+function getServiceSlug(serviceName: string): string {
   return serviceName
     .toLowerCase()
     .replace(/[^a-z0-9\s-]/g, "") // Remove non-alphanumeric except space and dash
@@ -127,41 +81,54 @@ function getUrl(serviceName: string) {
     .replace(/^-+|-+$/g, "");     // Trim leading/trailing dashes
 }
 
-function ServiceLink({ service }: { service: Service }) {
+interface ServiceLinkProps {
+  service: Service;
+}
+
+function ServiceLink({ service }: ServiceLinkProps) {
   const [expanded, setExpanded] = useState(false);
-  const maxLength = 80; // Number of characters to show before "Read more"
-  const shortDesc = service.serviceDescription.slice(0, maxLength);
+  const maxLength = 100; // Number of characters to show before "Read more"
+  const shouldTruncate = service.serviceDescription.length > maxLength;
+  const displayDescription = shouldTruncate && !expanded 
+    ? service.serviceDescription.slice(0, maxLength) + "..."
+    : service.serviceDescription;
+
+  const handleToggleExpand = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setExpanded(prev => !prev);
+  };
 
   return (
     <Link
-      key={service.serviceId}
-      href={`/services/${getUrl(service.serviceName)}`}
-      className="border rounded-lg overflow-hidden hover:shadow-lg transition group"
+      href={`/services/${getServiceSlug(service.serviceName)}`}
+      className="group block border rounded-lg overflow-hidden hover:shadow-lg transition-all duration-300 hover:border-blue-200"
     >
-      <div className="relative h-48 w-full">
+      <div className="relative h-48 w-full overflow-hidden">
         <Image
           src={getServiceImage(service.serviceName)}
           alt={service.serviceName}
           fill
           className="object-cover group-hover:scale-105 transition-transform duration-300"
-          sizes="(max-width: 768px) 100vw, 33vw"
+          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+          priority={false}
         />
       </div>
-      <div className="p-4">
-        <h2 className="text-xl font-semibold mb-2">{service.serviceName}</h2>
-        <p className="text-gray-600 text-sm">
-          {expanded ? service.serviceDescription : `${shortDesc}... `}
-          <button
-            type="button"
-            className={`text-gray-400 hover:underline hover:text-gray-700 transition-colors duration-500${expanded ? " ml-1" : ""}`}
-            onClick={e => {
-              e.preventDefault();
-              e.stopPropagation();
-              setExpanded(prev => !prev);
-            }}
-          >
-            {expanded ? "Read less" : "Read more"}
-          </button>
+      <div className="p-6">
+        <h3 className="text-xl font-semibold mb-3 group-hover:text-blue-600 transition-colors">
+          {service.serviceName}
+        </h3>
+        <p className="text-gray-600 text-sm leading-relaxed">
+          {displayDescription}
+          {shouldTruncate && (
+            <button
+              type="button"
+              className="ml-2 text-gray-600 hover:text-gray-800 hover:underline transition-colors font-medium"
+              onClick={handleToggleExpand}
+            >
+              {expanded ? "Read less" : "Read more"}
+            </button>
+          )}
         </p>
       </div>
     </Link>
@@ -169,111 +136,128 @@ function ServiceLink({ service }: { service: Service }) {
 }
 
 export default function UserServicesPage() {
-  const [loading, setLoading] = useState(true);
-  const [refreshKey, setRefreshKey] = useState(0);
   const [services, setServices] = useState<Service[]>([]);
-
-  const autoplay = Autoplay({ delay: 4000, stopOnInteraction: true });
-
-  // --- LOGIC METHODS ---
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchServices = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const res = await fetch(API_URL);
-      if (!res.ok) throw new Error("Failed to fetch services");
-      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(`Failed to fetch services: ${res.status}`);
+      }
+      const data: Service[] = await res.json();
       setServices(data);
     } catch (err) {
       console.error("Failed to fetch services", err);
+      setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // --- EFFECTS ---
-
   useEffect(() => {
     fetchServices();
   }, [fetchServices]);
 
-  // --- RENDER ---
+  const activeServices = services.filter(service => service.status === "Active");
 
   return (
     <>
+      {/* Hero Section */}
       <div className="relative h-64 md:h-80 lg:h-[500px]">
         <Image
           src={assets.Services}
-          alt="Services"
-          className="w-full h-full object-cover"
+          alt="Legal Services"
+          fill
+          className="object-cover"
+          priority
         />
         <div className="absolute inset-0 bg-black/60 flex flex-col items-start justify-center px-6 md:px-16 text-white">
-          <h2 className="text-2xl md:text-3xl font-bold uppercase mb-2">
+          <h1 className="text-2xl md:text-4xl lg:text-5xl font-bold uppercase mb-4">
             Need counseling for your everything?
-          </h2>
-          <p className="text-base md:text-lg mb-4">
-            <span className="text-white font-bold italic">BASICOTOO</span> -
-            accompanies customers in every step of the way.
+          </h1>
+          <p className="text-base md:text-lg lg:text-xl mb-4 max-w-2xl">
+            <span className="text-white font-bold italic">BASICOTOO</span> accompanies customers in every step of the way.
           </p>
         </div>
       </div>
+
       <MaxWidthWrapper>
-        <div className="p-8 max-w-7xl mx-auto">
-          <h1 className="text-4xl font-bold mb-10 text-center">Our Services</h1>
-          <div className="text-xl italic mb-10 text-center">
-            BASICOTOO provides a wide range of comprehensive legal services
-            across all areas of core business activities.
+        <div className="py-12 px-4">
+          {/* Services Section */}
+          <div className="text-center mb-12">
+            <h2 className="text-3xl md:text-4xl font-bold mb-4">Our Services</h2>
+            <p className="text-lg md:text-xl text-gray-600 italic max-w-4xl mx-auto">
+              BASICOTOO provides a wide range of comprehensive legal services
+              across all areas of core business activities.
+            </p>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+
+          {/* Services Grid */}
+          <div className="mb-20">
             {loading ? (
-              <div className="col-span-full text-center text-gray-500">
-                <Loader2 className="h-6 w-6 animate-spin mx-auto text-gray-400" />
-                Loading services...
+              <div className="flex flex-col items-center justify-center py-20">
+                <Loader2 className="h-8 w-8 animate-spin mb-4 text-blue-600" />
+                <p className="text-gray-500">Loading services...</p>
+              </div>
+            ) : error ? (
+              <div className="flex flex-col items-center justify-center py-20">
+                <p className="text-red-500 mb-4">Error: {error}</p>
+                <button
+                  onClick={fetchServices}
+                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                >
+                  Try Again
+                </button>
+              </div>
+            ) : activeServices.length === 0 ? (
+              <div className="text-center py-20">
+                <p className="text-gray-500 text-lg">No services available at the moment.</p>
               </div>
             ) : (
-              services
-                .filter(service => service.status === "Active")
-                .map(service => (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+                {activeServices.map(service => (
                   <ServiceLink key={service.serviceId} service={service} />
-                ))
+                ))}
+              </div>
             )}
           </div>
 
-          <h1 className="text-4xl font-bold mb-10 text-center mt-20">
-            Our Documentations
-          </h1>
-          <div className="text-xl italic mb-10 text-center">
-            BASICOTOO provides official documentations for your legal needs.
+          {/* Documentation Section */}
+          <div className="text-center mb-12">
+            <h2 className="text-3xl md:text-4xl font-bold mb-4">Our Documentation</h2>
+            <p className="text-lg md:text-xl text-gray-600 italic max-w-4xl mx-auto">
+              BASICOTOO provides official documentation for your legal needs.
+            </p>
           </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-            {loading ? (
-              <div className="col-span-full text-center text-gray-500">
-                <Loader2 className="h-6 w-6 animate-spin mx-auto text-gray-400" />
-                Loading documentations...
-              </div>
-            ) : (
-              documentations.map((doc) => (
-                <Link
-                  key={doc.slug}
-                  href={`/documents/${doc.slug}`}
-                  className="border rounded-lg overflow-hidden hover:shadow-lg transition group"
-                >
-                  <div className="relative h-48 w-full">
-                    <Image
-                      src={doc.image}
-                      alt={doc.name}
-                      fill
-                      className="object-cover group-hover:scale-105 transition-transform duration-300"
-                      sizes="(max-width: 768px) 100vw, 33vw"
-                    />
-                  </div>
-                  <div className="p-4">
-                    <h2 className="text-xl font-semibold mb-2">{doc.name}</h2>
-                    <p className="text-gray-600 text-sm">{doc.description}</p>
-                  </div>
-                </Link>
-              ))
-            )}
+            {documentations.map((doc) => (
+              <Link
+                key={doc.slug}
+                href={`/documents/${doc.slug}`}
+                className="group block border rounded-lg overflow-hidden hover:shadow-lg transition-all duration-300 hover:border-blue-200"
+              >
+                <div className="relative h-48 w-full overflow-hidden">
+                  <Image
+                    src={doc.image}
+                    alt={doc.name}
+                    fill
+                    className="object-cover group-hover:scale-105 transition-transform duration-300"
+                    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                  />
+                </div>
+                <div className="p-6">
+                  <h3 className="text-xl font-semibold mb-3 group-hover:text-blue-600 transition-colors">
+                    {doc.name}
+                  </h3>
+                  <p className="text-gray-600 text-sm">{doc.description}</p>
+                </div>
+              </Link>
+            ))}
           </div>
         </div>
       </MaxWidthWrapper>

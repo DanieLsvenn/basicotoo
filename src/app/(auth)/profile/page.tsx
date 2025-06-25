@@ -1,3 +1,5 @@
+//src/app/(auth)/profile/page.tsx
+
 "use client";
 
 import { useState, useEffect } from "react";
@@ -346,6 +348,7 @@ export default function ProfilePage() {
                         {profile.email}
                       </span>
                     </div>
+                    <p className="text-sm text-muted-foreground">AccountId: {profile.accountId}</p>
                   </div>
                   <Badge
                     variant="secondary"

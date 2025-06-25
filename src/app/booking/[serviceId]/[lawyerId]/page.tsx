@@ -11,7 +11,8 @@ import {
   DollarSign,
   User,
   CheckCircle,
-  XCircle
+  XCircle,
+  CreditCard
 } from "lucide-react";
 import { MaxWidthWrapper } from "@/components/max-width-wrapper";
 import { Button } from "@/components/ui/button";
@@ -49,6 +50,21 @@ interface UserProfile {
   email: string;
   fullName: string;
   username: string;
+}
+
+interface PendingBooking {
+  bookingId: string;
+  bookingDate: string;
+  price: number;
+  lawyerName: string;
+  customerName: string;
+  serviceName: string;
+  customerId: string;
+  lawyerId: string;
+  serviceId: string;
+  startTime: string;
+  endTime: string;
+  status: string;
 }
 
 // Helper functions
@@ -99,7 +115,10 @@ export default function BookingPage() {
   const [loading, setLoading] = useState(true);
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [booking, setBooking] = useState(false);
+  const [bookingId, setBookingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [pendingBookings, setPendingBookings] = useState<PendingBooking[]>([]);
+  const [orderProcessing, setOrderProcessing] = useState(false);
 
   // Fetch user profile
   const fetchProfile = useCallback(async () => {
@@ -129,14 +148,40 @@ export default function BookingPage() {
     }
   }, [router]);
 
+  // Fetch pending bookings
+  const fetchPendingBookings = useCallback(async () => {
+    if (!profile?.accountId) return;
+
+    try {
+      const response = await fetch(
+        `https://localhost:7286/api/Booking?customerId=${profile.accountId}&status=Pending`
+      );
+      
+      if (response.ok) {
+        const data: PendingBooking[] = await response.json();
+        setPendingBookings(data);
+        
+        // Check if there's a pending booking for this service and lawyer
+        const matchingBooking = data.find(
+          booking => booking.serviceId === serviceId && booking.lawyerId === lawyerId
+        );
+        
+        if (matchingBooking) {
+          setBookingId(matchingBooking.bookingId);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to fetch pending bookings:", error);
+    }
+  }, [profile?.accountId, serviceId, lawyerId]);
+
   // Fetch service details
   const fetchService = useCallback(async () => {
     try {
-      const response = await fetch("https://localhost:7218/api/Service");
+      const response = await fetch(`https://localhost:7218/api/Service/${serviceId}`);
       if (!response.ok) throw new Error("Failed to fetch services");
 
-      const services: Service[] = await response.json();
-      const foundService = services.find(s => s.serviceId === serviceId);
+      const foundService = await response.json();
 
       if (!foundService) throw new Error("Service not found");
       setService(foundService);
@@ -160,6 +205,7 @@ export default function BookingPage() {
     } catch (error) {
       console.error("Failed to fetch lawyer:", error);
       setError("Failed to load lawyer details");
+      toast.error("Lawyer not found or unavailable for this service");
     }
   }, [serviceId, lawyerId]);
 
@@ -185,7 +231,6 @@ export default function BookingPage() {
       setSelectedSlots([]);
     } catch (error) {
       console.error("Failed to fetch slots:", error);
-      toast.error("Failed to load available time slots");
       setAvailableSlots([]);
     } finally {
       setSlotsLoading(false);
@@ -203,15 +248,23 @@ export default function BookingPage() {
     });
   };
 
-  // Handle booking
+  // Handle booking and redirect to payment
   const handleBooking = async () => {
     if (!selectedSlots.length) {
       toast.error("Please select at least one time slot");
       return;
     }
 
-    if (!profile || !lawyer || !selectedDate) {
-      toast.error("Missing required information");
+    if (!profile) {
+      toast.error("Missing user profile information");
+      return;
+    }
+    if (!lawyer) {
+      toast.error("Missing lawyer information");
+      return;
+    }
+    if (!selectedDate) {
+      toast.error("Missing selected date");
       return;
     }
 
@@ -242,9 +295,12 @@ export default function BookingPage() {
       });
 
       if (response.ok) {
-        toast.success("Booking created successfully!");
-        // Navigate to payment or booking confirmation page
-        router.push("/bookings"); // Adjust this route as needed
+        const data = await response.json();
+        setBookingId(data.bookingId);
+        toast.success("Booking created successfully! Redirecting to payment...");
+        
+        // Immediately redirect to payment
+        await handleOrder(data.bookingId, lawyer.pricePerHour * selectedSlots.length);
       } else {
         const errorData = await response.json();
         throw new Error(errorData.message || "Failed to create booking");
@@ -257,8 +313,56 @@ export default function BookingPage() {
     }
   };
 
+  // Handle order (payment redirect)
+  const handleOrder = async (bookingIdParam?: string, amountParam?: number) => {
+    const targetBookingId = bookingIdParam || bookingId;
+    const targetAmount = amountParam || totalPrice;
+
+    if (!targetBookingId) {
+      toast.error("No booking found to pay for.");
+      return;
+    }
+
+    setOrderProcessing(true);
+    try {
+      const response = await fetch("https://localhost:7024/api/Payment/create-payment-url", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          orderId: null,
+          bookingId: targetBookingId,
+          amount: targetAmount,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to create payment URL");
+      }
+
+      const data = await response.json();
+      if (data.url) {
+        window.location.href = data.url; // Use window.location.href for external redirect
+      } else {
+        toast.error("No payment URL returned from server.");
+      }
+    } catch (error) {
+      console.error("Payment order failed:", error);
+      toast.error("Failed to create payment order. Please try again.");
+    } finally {
+      setOrderProcessing(false);
+    }
+  };
+
   // Calculate total price
   const totalPrice = lawyer ? lawyer.pricePerHour * selectedSlots.length : 0;
+
+  // Get pending booking for current service/lawyer combination
+  const currentPendingBooking = pendingBookings.find(
+    booking => booking.serviceId === serviceId && booking.lawyerId === lawyerId
+  );
 
   // Initialize data
   useEffect(() => {
@@ -281,6 +385,18 @@ export default function BookingPage() {
       fetchAvailableSlots(selectedDate);
     }
   }, [selectedDate, lawyerId, fetchAvailableSlots]);
+
+  // Fetch pending bookings periodically
+  useEffect(() => {
+    if (profile?.accountId) {
+      fetchPendingBookings();
+      
+      // Set up interval to check for pending bookings every 5 seconds
+      const interval = setInterval(fetchPendingBookings, 5000);
+      
+      return () => clearInterval(interval);
+    }
+  }, [fetchPendingBookings, profile?.accountId]);
 
   if (loading) {
     return (
@@ -327,6 +443,46 @@ export default function BookingPage() {
             </p>
           </div>
         </div>
+
+        {/* Pending Booking Alert */}
+        {currentPendingBooking && (
+          <Card className="border-orange-200 bg-orange-50">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <AlertTriangle className="h-5 w-5 text-orange-600" />
+                  <div>
+                    <p className="font-medium text-orange-800">
+                      You have a pending booking for this service
+                    </p>
+                    <p className="text-sm text-orange-600">
+                      Booking Date: {currentPendingBooking.bookingDate} | 
+                      Amount: {formatPrice(currentPendingBooking.price)}
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  onClick={() => handleOrder(currentPendingBooking.bookingId, currentPendingBooking.price)}
+                  disabled={orderProcessing}
+                  variant="outline"
+                  className="border-orange-300 text-orange-700 hover:bg-orange-100"
+                >
+                  {orderProcessing ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      <CreditCard className="mr-2 h-4 w-4" />
+                      Return to Payment
+                    </>
+                  )}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <div className="grid lg:grid-cols-3 gap-8">
           {/* Left Column - Booking Details */}
@@ -385,7 +541,8 @@ export default function BookingPage() {
                     selected={selectedDate}
                     onSelect={setSelectedDate}
                     disabled={[
-                      { before: (() => {
+                      {
+                        before: (() => {
                           const date = new Date();
                           date.setDate(date.getDate() + 1);
                           return date;
@@ -509,12 +666,12 @@ export default function BookingPage() {
                   {booking ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Booking...
+                      Creating Booking...
                     </>
                   ) : (
                     <>
-                      <CheckCircle className="mr-2 h-4 w-4" />
-                      Book Lawyer ({selectedSlots.length} slot{selectedSlots.length !== 1 ? 's' : ''})
+                      <CreditCard className="mr-2 h-4 w-4" />
+                      Book & Pay ({selectedSlots.length} slot{selectedSlots.length !== 1 ? 's' : ''})
                     </>
                   )}
                 </Button>

@@ -18,7 +18,15 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Plus, Edit, Trash2, Search, Loader2 } from "lucide-react";
+import {
+  Plus,
+  Edit,
+  Trash2,
+  Search,
+  Loader2,
+  Camera,
+  Upload,
+} from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -26,8 +34,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import dynamic from "next/dynamic";
 import ReactSelect, { MultiValue, ActionMeta } from "react-select";
+import { toast } from "sonner";
 
 interface ServiceOption {
   serviceId: string;
@@ -68,8 +78,10 @@ const initialFormData = {
   serviceForLawyerDTOs: [],
 };
 
-// Dynamically import your rich text editor (replace with your actual editor if needed)
-const DynamicEditor = dynamic(() => import("@/components/DynamicEditor"), { ssr: false });
+// Dynamically import your rich text editor
+const DynamicEditor = dynamic(() => import("@/components/DynamicEditor"), {
+  ssr: false,
+});
 
 export default function LawyersPage() {
   const [lawyers, setLawyers] = useState<Lawyer[]>([]);
@@ -85,6 +97,7 @@ export default function LawyersPage() {
   const [aboutContent, setAboutContent] = useState<string>("");
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
 
   // --- LOGIC METHODS ---
 
@@ -106,6 +119,58 @@ export default function LawyersPage() {
     const data = await res.json();
     setServices(data);
   }, []);
+
+  // Handle image upload
+  const handleImageUpload = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select an image file");
+      return;
+    }
+
+    // Validate file size (5MB max)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Image size must be less than 5MB");
+      return;
+    }
+
+    setIsUploadingImage(true);
+
+    try {
+      const formDataUpload = new FormData();
+      formDataUpload.append("file", file);
+
+      // Upload to Cloudinary via your API route
+      const uploadResponse = await fetch("/api/upload", {
+        method: "POST",
+        body: formDataUpload,
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error("Failed to upload image");
+      }
+
+      const { url } = await uploadResponse.json();
+
+      // Update the form data with the new image URL
+      setFormData((prev: any) => ({
+        ...prev,
+        accountImage: url,
+      }));
+
+      toast.success("Image uploaded successfully");
+    } catch (error) {
+      console.error("Failed to upload image:", error);
+      toast.error("Failed to upload image");
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
 
   // Delete a lawyer (logic)
   const deleteLawyer = async (lawyer: Lawyer) => {
@@ -141,13 +206,17 @@ export default function LawyersPage() {
     _actionMeta: ActionMeta<ServiceSelectOption>
   ) => {
     setFormData((prev: any) => {
-      const newServiceForLawyerDTOs = (selected as ServiceSelectOption[]).map((opt) => {
-        const existing = prev.serviceForLawyerDTOs.find((s: any) => s.serviceId === opt.value);
-        return {
-          serviceId: opt.value,
-          pricePerHour: existing ? existing.pricePerHour : 0,
-        };
-      });
+      const newServiceForLawyerDTOs = (selected as ServiceSelectOption[]).map(
+        (opt) => {
+          const existing = prev.serviceForLawyerDTOs.find(
+            (s: any) => s.serviceId === opt.value
+          );
+          return {
+            serviceId: opt.value,
+            pricePerHour: existing ? existing.pricePerHour : 0,
+          };
+        }
+      );
       return {
         ...prev,
         serviceForLawyerDTOs: newServiceForLawyerDTOs,
@@ -180,19 +249,19 @@ export default function LawyersPage() {
 
     const payload = editingLawyer
       ? {
-        accountId: editingLawyer.accountId,
-        accountFullName: formData.accountFullName,
-        accountDob: formData.accountDob,
-        accountGender: formData.accountGender,
-        accountPhone: formData.accountPhone,
-        accountImage: formData.accountImage,
-        aboutLawyer: formData.aboutLawyer,
-        serviceForLawyer: formData.serviceForLawyerDTOs,
-      }
+          accountId: editingLawyer.accountId,
+          accountFullName: formData.accountFullName,
+          accountDob: formData.accountDob,
+          accountGender: formData.accountGender,
+          accountPhone: formData.accountPhone,
+          accountImage: formData.accountImage,
+          aboutLawyer: formData.aboutLawyer,
+          serviceForLawyer: formData.serviceForLawyerDTOs,
+        }
       : {
-        ...formData,
-        serviceForLawyerDTOs: formData.serviceForLawyerDTOs,
-      };
+          ...formData,
+          serviceForLawyerDTOs: formData.serviceForLawyerDTOs,
+        };
 
     await fetch(url, {
       method,
@@ -215,18 +284,18 @@ export default function LawyersPage() {
   const handleDelete = (lawyer: Lawyer) => {
     setDeleteTarget(lawyer);
     setDeleteDialogOpen(true);
-    setRefreshKey(prev => prev + 1); // Trigger refresh
+    setRefreshKey((prev) => prev + 1);
   };
 
   const handleConfirmDelete = async () => {
     if (!deleteTarget) return;
     await deleteLawyer(deleteTarget);
-    setRefreshKey(prev => prev + 1); // Trigger refresh after delete
+    setRefreshKey((prev) => prev + 1);
   };
 
   const handleEdit = (lawyer: Lawyer) => {
     editLawyer(lawyer);
-    setRefreshKey(prev => prev + 1); // Trigger refresh
+    setRefreshKey((prev) => prev + 1);
   };
 
   const handlePriceChange = (serviceId: string, price: number) => {
@@ -245,19 +314,29 @@ export default function LawyersPage() {
     setLoading(true);
     await submitLawyerForm();
     setLoading(false);
-    setRefreshKey(prev => prev + 1); // Trigger refresh after submit
+    setRefreshKey((prev) => prev + 1);
+  };
+
+  const getInitials = (name: string) => {
+    return name
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2);
   };
 
   useEffect(() => {
     fetchLawyers();
     fetchServices();
-  }, [refreshKey]); // <-- Now useEffect depends on refreshKey
+  }, [refreshKey]);
 
   const filteredLawyers = useMemo(
     () =>
       lawyers.filter((lawyer) =>
-        [lawyer.accountFullName, lawyer.accountEmail]
-          .some((field) => field?.toLowerCase().includes(searchTerm.toLowerCase()))
+        [lawyer.accountFullName, lawyer.accountEmail].some((field) =>
+          field?.toLowerCase().includes(searchTerm.toLowerCase())
+        )
       ),
     [lawyers, searchTerm]
   );
@@ -266,32 +345,97 @@ export default function LawyersPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Lawyers Management</h1>
-          <p className="text-muted-foreground">Manage your law firm's attorney profiles</p>
+          <h1 className="text-3xl font-bold tracking-tight">
+            Lawyers Management
+          </h1>
+          <p className="text-muted-foreground">
+            Manage your law firm's attorney profiles
+          </p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <Button onClick={() => {
-              setEditingLawyer(null);
-              setFormData(initialFormData);
-            }}>
+            <Button
+              onClick={() => {
+                setEditingLawyer(null);
+                setFormData(initialFormData);
+              }}
+            >
               <Plus className="mr-2 h-4 w-4" /> Add Lawyer
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-h-[90vh] overflow-y-auto max-w-2xl">
             <DialogHeader>
-              <DialogTitle>{editingLawyer ? "Edit Lawyer" : "Add Lawyer"}</DialogTitle>
+              <DialogTitle>
+                {editingLawyer ? "Edit Lawyer" : "Add Lawyer"}
+              </DialogTitle>
               <DialogDescription>
-                {editingLawyer ? "Update lawyer info." : "Fill out to add a new lawyer."}
+                {editingLawyer
+                  ? "Update lawyer info."
+                  : "Fill out to add a new lawyer."}
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Profile Image Upload Section */}
+              <div className="flex flex-col items-center space-y-4 p-4 border rounded-lg bg-gray-50">
+                <div className="relative">
+                  <Avatar className="h-24 w-24">
+                    <AvatarImage
+                      src={formData.accountImage || ""}
+                      alt={formData.accountFullName || "Lawyer"}
+                    />
+                    <AvatarFallback className="text-lg font-semibold">
+                      {formData.accountFullName
+                        ? getInitials(formData.accountFullName)
+                        : "L"}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="absolute -bottom-2 -right-2">
+                    <input
+                      type="file"
+                      id="lawyer-image-upload"
+                      accept="image/*"
+                      onChange={handleImageUpload}
+                      className="hidden"
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-8 w-8 rounded-full p-0"
+                      onClick={() =>
+                        document.getElementById("lawyer-image-upload")?.click()
+                      }
+                      disabled={isUploadingImage}
+                    >
+                      {isUploadingImage ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Camera className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                </div>
+                <div className="text-center">
+                  <p className="text-sm text-muted-foreground">
+                    Click the camera icon to upload a profile picture
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Max file size: 5MB. Supported formats: JPG, PNG, GIF
+                  </p>
+                </div>
+              </div>
+
               <div>
                 <label className="block mb-1 font-medium">Full Name</label>
                 <Input
                   placeholder="Please enter Full Name"
                   value={formData.accountFullName}
-                  onChange={(e) => setFormData({ ...formData, accountFullName: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      accountFullName: e.target.value,
+                    })
+                  }
                   required
                 />
               </div>
@@ -301,7 +445,9 @@ export default function LawyersPage() {
                   type="date"
                   placeholder="Please enter Date of Birth"
                   value={formData.accountDob}
-                  onChange={(e) => setFormData({ ...formData, accountDob: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, accountDob: e.target.value })
+                  }
                   required
                 />
               </div>
@@ -309,7 +455,9 @@ export default function LawyersPage() {
                 <label className="block mb-1 font-medium">Gender</label>
                 <Select
                   value={formData.accountGender.toString()}
-                  onValueChange={(val) => setFormData({ ...formData, accountGender: parseInt(val) })}
+                  onValueChange={(val) =>
+                    setFormData({ ...formData, accountGender: parseInt(val) })
+                  }
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Please enter Gender" />
@@ -325,22 +473,18 @@ export default function LawyersPage() {
                 <Input
                   placeholder="Please enter Phone"
                   value={formData.accountPhone}
-                  onChange={(e) => setFormData({ ...formData, accountPhone: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="block mb-1 font-medium">Image URL</label>
-                <Input
-                  placeholder="Please enter Image URL"
-                  value={formData.accountImage}
-                  onChange={(e) => setFormData({ ...formData, accountImage: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, accountPhone: e.target.value })
+                  }
                 />
               </div>
               <div>
                 <label className="block mb-1 font-medium">About Lawyer</label>
                 <DynamicEditor
                   content={formData.aboutLawyer}
-                  onContentChange={(val: string) => setFormData({ ...formData, aboutLawyer: val })}
+                  onContentChange={(val: string) =>
+                    setFormData({ ...formData, aboutLawyer: val })
+                  }
                 />
               </div>
               <div>
@@ -348,17 +492,17 @@ export default function LawyersPage() {
                 <ReactSelect<ServiceSelectOption, true>
                   isMulti
                   options={services
-                    .filter(s => s.status === "Active")
-                    .map(s => ({
+                    .filter((s) => s.status === "Active")
+                    .map((s) => ({
                       value: s.serviceId,
                       label: s.serviceName,
                     }))}
-                  value={formData.serviceForLawyerDTOs
-                    .map((s: any) => ({
-                      value: s.serviceId,
-                      label: services.find(opt => opt.serviceId === s.serviceId)?.serviceName || "",
-                    }))
-                  }
+                  value={formData.serviceForLawyerDTOs.map((s: any) => ({
+                    value: s.serviceId,
+                    label:
+                      services.find((opt) => opt.serviceId === s.serviceId)
+                        ?.serviceName || "",
+                  }))}
                   onChange={handleServiceChange}
                   placeholder="Please select Services"
                   className="basic-multi-select"
@@ -366,27 +510,30 @@ export default function LawyersPage() {
                 />
               </div>
               {/* Individual price fields for each selected service */}
-              {formData.serviceForLawyerDTOs
-                .map((s: any) => {
-                  const serviceName =
-                    services.find(opt => opt.serviceId === s.serviceId)?.serviceName || "Service";
-                  return (
-                    <div key={s.serviceId}>
-                      <label className="block mb-1 font-medium">
-                        Price Per Hour for {serviceName}
-                      </label>
-                      <Input
-                        type="number"
-                        placeholder={`Please enter Price Per Hour for ${serviceName}`}
-                        value={s.pricePerHour}
-                        onChange={e =>
-                          handlePriceChange(s.serviceId, parseFloat(e.target.value) || 0)
-                        }
-                        required
-                      />
-                    </div>
-                  );
-                })}
+              {formData.serviceForLawyerDTOs.map((s: any) => {
+                const serviceName =
+                  services.find((opt) => opt.serviceId === s.serviceId)
+                    ?.serviceName || "Service";
+                return (
+                  <div key={s.serviceId}>
+                    <label className="block mb-1 font-medium">
+                      Price Per Hour for {serviceName}
+                    </label>
+                    <Input
+                      type="number"
+                      placeholder={`Please enter Price Per Hour for ${serviceName}`}
+                      value={s.pricePerHour}
+                      onChange={(e) =>
+                        handlePriceChange(
+                          s.serviceId,
+                          parseFloat(e.target.value) || 0
+                        )
+                      }
+                      required
+                    />
+                  </div>
+                );
+              })}
               {!editingLawyer && (
                 <>
                   <div>
@@ -394,7 +541,12 @@ export default function LawyersPage() {
                     <Input
                       placeholder="Please enter Username"
                       value={formData.accountUsername}
-                      onChange={(e) => setFormData({ ...formData, accountUsername: e.target.value })}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          accountUsername: e.target.value,
+                        })
+                      }
                       required
                     />
                   </div>
@@ -404,11 +556,18 @@ export default function LawyersPage() {
                       type="password"
                       placeholder="Please enter Password"
                       value={formData.accountPassword}
-                      onChange={(e) => setFormData({ ...formData, accountPassword: e.target.value })}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          accountPassword: e.target.value,
+                        })
+                      }
                       required
                     />
                     {passwordError && (
-                      <label className="text-red-600 text-sm mt-1 block">{passwordError}</label>
+                      <label className="text-red-600 text-sm mt-1 block">
+                        {passwordError}
+                      </label>
                     )}
                   </div>
                   <div>
@@ -417,20 +576,29 @@ export default function LawyersPage() {
                       type="email"
                       placeholder="Please enter Email"
                       value={formData.accountEmail}
-                      onChange={(e) => setFormData({ ...formData, accountEmail: e.target.value })}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          accountEmail: e.target.value,
+                        })
+                      }
                       required
                     />
                   </div>
                 </>
               )}
-              {loading ? (
-                <Button type="submit" disabled={loading}>
-                  <Loader2 className="h-6 w-6 animate-spin mx-auto" />
-                  {editingLawyer ? "Update Lawyer" : "Add Lawyer"}
-                </Button>
-              ) : (
-                <Button type="submit">{editingLawyer ? "Update Lawyer" : "Add Lawyer"}</Button>
-              )}
+              <Button type="submit" disabled={loading || isUploadingImage}>
+                {loading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    {editingLawyer ? "Updating..." : "Adding..."}
+                  </>
+                ) : editingLawyer ? (
+                  "Update Lawyer"
+                ) : (
+                  "Add Lawyer"
+                )}
+              </Button>
             </form>
           </DialogContent>
         </Dialog>
@@ -455,6 +623,7 @@ export default function LawyersPage() {
             <table className="w-full border-collapse">
               <thead>
                 <tr className="border-b">
+                  <th className="text-left p-4 font-medium">Profile</th>
                   <th className="text-left p-4 font-medium">Full Name</th>
                   <th className="text-left p-4 font-medium">Email</th>
                   <th className="text-left p-4 font-medium">Gender</th>
@@ -467,7 +636,7 @@ export default function LawyersPage() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={7} className="text-center py-8">
+                    <td colSpan={8} className="text-center py-8">
                       <Loader2 className="h-6 w-6 animate-spin mx-auto" />
                       <p className="mt-2 text-sm text-muted-foreground">
                         Loading lawyers...
@@ -476,7 +645,7 @@ export default function LawyersPage() {
                   </tr>
                 ) : filteredLawyers.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="text-center py-8">
+                    <td colSpan={8} className="text-center py-8">
                       <p className="text-sm text-muted-foreground">
                         No lawyers found
                       </p>
@@ -484,23 +653,40 @@ export default function LawyersPage() {
                   </tr>
                 ) : (
                   filteredLawyers.map((lawyer) => (
-                    <tr key={lawyer.accountId} className="border-b hover:bg-gray-50">
-                      <td className="p-4 font-medium">{lawyer.accountFullName}</td>
+                    <tr
+                      key={lawyer.accountId}
+                      className="border-b hover:bg-gray-50"
+                    >
+                      <td className="p-4">
+                        <Avatar className="h-10 w-10">
+                          <AvatarImage
+                            src={lawyer.accountImage || ""}
+                            alt={lawyer.accountFullName}
+                          />
+                          <AvatarFallback className="text-sm font-semibold">
+                            {getInitials(lawyer.accountFullName)}
+                          </AvatarFallback>
+                        </Avatar>
+                      </td>
+                      <td className="p-4 font-medium">
+                        {lawyer.accountFullName}
+                      </td>
                       <td className="p-4">{lawyer.accountEmail}</td>
                       <td className="p-4">
                         {lawyer.accountGender === 0
                           ? ""
                           : lawyer.accountGender === 1
-                            ? "Male"
-                            : "Female"}
+                          ? "Male"
+                          : "Female"}
                       </td>
                       <td className="p-4">{lawyer.accountPhone}</td>
                       <td className="p-4">
                         <span
-                          className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${lawyer.accountStatus === "ACTIVE"
-                            ? "bg-green-100 text-green-700"
-                            : "bg-red-100 text-red-700"
-                            }`}
+                          className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                            lawyer.accountStatus === "ACTIVE"
+                              ? "bg-green-100 text-green-700"
+                              : "bg-red-100 text-red-700"
+                          }`}
                         >
                           {lawyer.accountStatus}
                         </span>
@@ -559,7 +745,6 @@ export default function LawyersPage() {
             <div className="text-sm text-muted-foreground">
               Showing {filteredLawyers.length} of {lawyers.length} lawyers
             </div>
-            {/* Pagination controls can be added here if needed */}
           </div>
         </CardContent>
       </Card>
@@ -570,7 +755,12 @@ export default function LawyersPage() {
           <DialogHeader>
             <DialogTitle>About Lawyer</DialogTitle>
           </DialogHeader>
-          <div className="prose max-w-none" dangerouslySetInnerHTML={{ __html: aboutContent || "<em>No about info provided.</em>" }} />
+          <div
+            className="prose max-w-none"
+            dangerouslySetInnerHTML={{
+              __html: aboutContent || "<em>No about info provided.</em>",
+            }}
+          />
         </DialogContent>
       </Dialog>
 
@@ -581,11 +771,17 @@ export default function LawyersPage() {
             <DialogTitle>Delete Lawyer</DialogTitle>
             <DialogDescription>
               Are you sure you want to delete{" "}
-              <span className="font-semibold">{deleteTarget?.accountFullName}</span>? This action cannot be undone.
+              <span className="font-semibold">
+                {deleteTarget?.accountFullName}
+              </span>
+              ? This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <div className="flex justify-end space-x-2 mt-4">
-            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteDialogOpen(false)}
+            >
               Cancel
             </Button>
             <Button variant="destructive" onClick={handleConfirmDelete}>

@@ -249,19 +249,19 @@ export default function LawyersPage() {
 
     const payload = editingLawyer
       ? {
-          accountId: editingLawyer.accountId,
-          accountFullName: formData.accountFullName,
-          accountDob: formData.accountDob,
-          accountGender: formData.accountGender,
-          accountPhone: formData.accountPhone,
-          accountImage: formData.accountImage,
-          aboutLawyer: formData.aboutLawyer,
-          serviceForLawyer: formData.serviceForLawyerDTOs,
-        }
+        accountId: editingLawyer.accountId,
+        accountFullName: formData.accountFullName,
+        accountDob: formData.accountDob,
+        accountGender: formData.accountGender,
+        accountPhone: formData.accountPhone,
+        accountImage: formData.accountImage,
+        aboutLawyer: formData.aboutLawyer,
+        serviceForLawyer: formData.serviceForLawyerDTOs,
+      }
       : {
-          ...formData,
-          serviceForLawyerDTOs: formData.serviceForLawyerDTOs,
-        };
+        ...formData,
+        serviceForLawyerDTOs: formData.serviceForLawyerDTOs,
+      };
 
     await fetch(url, {
       method,
@@ -341,6 +341,7 @@ export default function LawyersPage() {
     [lawyers, searchTerm]
   );
 
+  // --- RENDER COMPONENT ---
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -676,17 +677,16 @@ export default function LawyersPage() {
                         {lawyer.accountGender === 0
                           ? ""
                           : lawyer.accountGender === 1
-                          ? "Male"
-                          : "Female"}
+                            ? "Male"
+                            : "Female"}
                       </td>
                       <td className="p-4">{lawyer.accountPhone}</td>
                       <td className="p-4">
                         <span
-                          className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                            lawyer.accountStatus === "ACTIVE"
-                              ? "bg-green-100 text-green-700"
-                              : "bg-red-100 text-red-700"
-                          }`}
+                          className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${lawyer.accountStatus === "ACTIVE"
+                            ? "bg-green-100 text-green-700"
+                            : "bg-red-100 text-red-700"
+                            }`}
                         >
                           {lawyer.accountStatus}
                         </span>

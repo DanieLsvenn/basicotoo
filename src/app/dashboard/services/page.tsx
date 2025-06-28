@@ -155,7 +155,7 @@ export default function ServicesPage() {
     [services, searchTerm]
   );
 
-  // --- RENDER ---
+  // --- RENDER COMPONENT ---
 
   return (
     <div className="space-y-6">

@@ -341,9 +341,21 @@ export default function UserServiceDetailPage() {
           setLoading(false);
           return;
         }
+      } else {
+        // Service fetch failed
+        setError("Failed to fetch service information.");
+        setLoading(false);
+        return;
       }
+    } catch (error) {
+      console.error("Failed to fetch service:", error);
+      setError("Failed to fetch service information.");
+      setLoading(false);
+      return;
+    }
 
-      // If not found in services, try form templates
+    // If not found in services, try form templates
+    try {
       const templateResponse = await fetch(
         "https://localhost:7276/api/templates-active"
       );
@@ -359,16 +371,21 @@ export default function UserServiceDetailPage() {
           setLoading(false);
           return;
         }
+      } else {
+        setError("Failed to fetch template information.");
+        setLoading(false);
+        return;
       }
-
-      // If neither found, throw error
-      throw new Error("Service or template not found");
     } catch (error) {
-      console.error("Failed to fetch service or template:", error);
-      setError(error instanceof Error ? error.message : "An error occurred");
-    } finally {
+      console.error("Failed to fetch template:", error);
+      setError("Failed to fetch template information.");
       setLoading(false);
+      return;
     }
+
+    // If neither found, throw error
+    setError("Service or template not found");
+    setLoading(false);
   }, [serviceSlug]);
 
   const fetchLawyers = useCallback(async (serviceId: string) => {
@@ -528,8 +545,7 @@ export default function UserServiceDetailPage() {
                     onClick={() => {
                       // Implement template download/use functionality
                       window.open(
-                        `/templates/download/${
-                          formTemplate.formTemplateId || formTemplate.id
+                        `/templates/download/${formTemplate.formTemplateId || formTemplate.id
                         }`,
                         "_blank"
                       );
@@ -544,8 +560,7 @@ export default function UserServiceDetailPage() {
                     onClick={() => {
                       // Implement template preview functionality
                       window.open(
-                        `/templates/preview/${
-                          formTemplate.formTemplateId || formTemplate.id
+                        `/templates/preview/${formTemplate.formTemplateId || formTemplate.id
                         }`,
                         "_blank"
                       );

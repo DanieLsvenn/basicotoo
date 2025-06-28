@@ -156,16 +156,16 @@ export default function BookingPage() {
       const response = await fetch(
         `https://localhost:7286/api/Booking?customerId=${profile.accountId}&status=Pending`
       );
-      
+
       if (response.ok) {
         const data: PendingBooking[] = await response.json();
         setPendingBookings(data);
-        
+
         // Check if there's a pending booking for this service and lawyer
         const matchingBooking = data.find(
           booking => booking.serviceId === serviceId && booking.lawyerId === lawyerId
         );
-        
+
         if (matchingBooking) {
           setBookingId(matchingBooking.bookingId);
         }
@@ -298,7 +298,7 @@ export default function BookingPage() {
         const data = await response.json();
         setBookingId(data.bookingId);
         toast.success("Booking created successfully! Redirecting to payment...");
-        
+
         // Immediately redirect to payment
         await handleOrder(data.bookingId, lawyer.pricePerHour * selectedSlots.length);
       } else {
@@ -390,10 +390,10 @@ export default function BookingPage() {
   useEffect(() => {
     if (profile?.accountId) {
       fetchPendingBookings();
-      
+
       // Set up interval to check for pending bookings every 5 seconds
       const interval = setInterval(fetchPendingBookings, 5000);
-      
+
       return () => clearInterval(interval);
     }
   }, [fetchPendingBookings, profile?.accountId]);
@@ -456,7 +456,7 @@ export default function BookingPage() {
                       You have a pending booking for this service
                     </p>
                     <p className="text-sm text-orange-600">
-                      Booking Date: {currentPendingBooking.bookingDate} | 
+                      Booking Date: {currentPendingBooking.bookingDate} |
                       Amount: {formatPrice(currentPendingBooking.price)}
                     </p>
                   </div>

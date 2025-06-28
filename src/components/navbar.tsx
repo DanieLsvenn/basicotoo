@@ -9,7 +9,6 @@ import { useAuth } from "@/lib/auth-context";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import Dock from "./ui/dock";
 import { useRouter } from "next/navigation";
-import { on } from "events";
 
 export const Navbar = () => {
   const router = useRouter();
@@ -32,7 +31,7 @@ export const Navbar = () => {
     router.push(href);
   };
 
-  const items = [
+  const dockItems = [
     { name: "Services", onClick: () => handleChangePage("/services") },
     { name: "About us", onClick: () => handleChangePage("/about-us") },
     { name: "Our lawyers", onClick: () => handleChangePage("/our-lawyers") },
@@ -43,16 +42,17 @@ export const Navbar = () => {
     <nav className="sticky z-[100] h-16 inset-x-0 top-0 w-full border-b border-gray-200 bg-white/80 backdrop-blur-lg transition-all">
       <MaxWidthWrapper>
         <div className="flex h-16 items-center justify-between">
+          {/* Logo */}
           <Link href="/" className="flex z-40 font-semibold">
             Basico
             <span className="text-brand-700 text-slate-400">Too</span>
           </Link>
 
-          {/* Dock and Buy Ticket in a flex row */}
+          {/* Center: Dock and Buy Ticket */}
           <div className="flex flex-1 items-center gap-3">
             <Dock
               className="hidden md:flex flex-auto items-center justify-center mx-4 gap-17 lg:mx-20 lg:gap-30 py-3 bg-white/50 shadow-sm dark:border dark:border-white/50 dark:bg-transparent"
-              items={items}
+              items={dockItems}
               panelHeight={45}
               baseItemSize={40}
               magnification={20}
@@ -62,13 +62,14 @@ export const Navbar = () => {
               className={buttonVariants({
                 size: "sm",
                 variant: "ghost",
+                className: "ml-2 md:ml-6", // Add margin for spacing
               })}
             >
               Buy Ticket
             </Link>
           </div>
 
-          {/* Burger button for mobile */}
+          {/* Mobile burger button */}
           <div className="md:hidden flex justify-end p-4">
             <button
               onClick={() => setMenuOpen(!menuOpen)}
@@ -114,7 +115,8 @@ export const Navbar = () => {
             </nav>
           )}
 
-          <div className="h-full flex items-center space-x-4">
+          {/* Right: Auth/User actions */}
+          <div className="h-full flex items-center space-x-4 ml-2">
             {isLoggedIn ? (
               <>
                 <Link

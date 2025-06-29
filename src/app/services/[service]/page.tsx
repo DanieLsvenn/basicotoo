@@ -161,7 +161,7 @@ function LawyerCard({ lawyer, serviceId, serviceName }: LawyerCardProps) {
 
             {/* Book Button */}
             <div className="mt-4">
-              <Link href={`/booking/${serviceId}/${lawyer.lawyerId}`}>
+              <Link href={`/checkout/booking/${serviceId}/${lawyer.lawyerId}`}>
                 <Button className="w-full bg-blue-600 hover:bg-blue-700 transition-colors">
                   Book Consultation
                 </Button>

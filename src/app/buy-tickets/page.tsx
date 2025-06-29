@@ -134,7 +134,7 @@ const BuyTicketsPage = () => {
   const handlePurchase = useCallback((packageId: string) => {
     setSelectedPackage(packageId);
     // Navigate to checkout page
-    window.location.href = `/checkout/${packageId}`;
+    window.location.href = `/checkout/ticket/${packageId}`;
   }, []);
 
   // Handle retry on error

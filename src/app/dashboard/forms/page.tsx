@@ -44,7 +44,6 @@ const API_BASE_URL = "https://localhost:7276/api";
 const API_SERVICE = "https://localhost:7218/api/Service";
 const STATUS_OPTIONS = ["ACTIVE", "INACTIVE"] as const;
 const CURRENCY_OPTIONS = ["VND", "USD"] as const;
-const USD_TO_VND_RATE = 24000; // Approximate exchange rate
 
 // Types
 type Status = typeof STATUS_OPTIONS[number];
@@ -93,6 +92,7 @@ export default function FormTemplatesPage() {
   const [currency, setCurrency] = useState<Currency>("VND");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<TemplateListItem | null>(null);
+  const [usdToVndRate, setUsdToVndRate] = useState<number>(24000); // fallback default
 
   // --- LOGIC METHODS ---
 
@@ -175,7 +175,7 @@ export default function FormTemplatesPage() {
     setLoading(true);
     try {
       // Convert price to VND for API
-      const priceInVND = currency === "USD" ? formData.price * USD_TO_VND_RATE : formData.price;
+      const priceInVND = currency === "USD" ? formData.price * usdToVndRate : formData.price;
       const payload = { ...formData, price: priceInVND };
 
       await apiRequest("/template", {
@@ -202,7 +202,7 @@ export default function FormTemplatesPage() {
     setLoading(true);
     try {
       // Convert price to VND for API
-      const priceInVND = currency === "USD" ? formData.price * USD_TO_VND_RATE : formData.price;
+      const priceInVND = currency === "USD" ? formData.price * usdToVndRate : formData.price;
       const payload = { ...formData, price: priceInVND };
 
       await apiRequest(`/template/${editingId}`, {
@@ -276,11 +276,11 @@ export default function FormTemplatesPage() {
   // Format price display
   const formatPrice = useCallback((price: number): string => {
     if (currency === "USD") {
-      const priceInUSD = price / USD_TO_VND_RATE;
+      const priceInUSD = price / usdToVndRate;
       return `$${priceInUSD.toFixed(2)}`;
     }
     return `${price.toLocaleString("en-US")} VND`;
-  }, [currency]);
+  }, [currency, usdToVndRate]);
 
   // Get service name by ID
   const getServiceName = useCallback((serviceId: string): string => {
@@ -357,6 +357,26 @@ export default function FormTemplatesPage() {
   useEffect(() => {
     fetchTemplates("all");
     fetchServices();
+  }, []);
+
+  useEffect(() => {
+    fetch("https://api.getgeoapi.com/v2/currency/convert?api_key=05585d2dbe81b54873e6a5ec72b0ad7e423bbcc0&from=USD&to=VND&amount=1&format=json")
+      .then(res => res.json())
+      .then(data => {
+        // Check if the response is successful and has the expected structure
+        if (
+          data &&
+          data.status === "success" &&
+          data.rates &&
+          data.rates.VND &&
+          data.rates.VND.rate
+        ) {
+          setUsdToVndRate(Number(data.rates.VND.rate));
+        }
+      })
+      .catch(() => {
+        setUsdToVndRate(26086.9826); // fallback
+      });
   }, []);
 
   // --- RENDER METHODS ---
@@ -618,7 +638,7 @@ export default function FormTemplatesPage() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="price">Price ({currency}) *</Label>
+                <Label htmlFor="price">Price (VND) *</Label>
                 <Input
                   id="price"
                   type="number"
@@ -752,7 +772,7 @@ export default function FormTemplatesPage() {
           }}
         >
           <Edit className="w-4 h-4 mr-2" />
-          Edit Template
+          Edit Templat
         </Button>
         <Button variant="outline" onClick={handleBackToList}>
           Close

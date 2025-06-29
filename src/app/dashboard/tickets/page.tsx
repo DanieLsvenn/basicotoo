@@ -42,7 +42,6 @@ import { toast } from "sonner";
 const API_BASE_URL = "https://localhost:7103/api";
 const STATUS_OPTIONS = ["ACTIVE", "INACTIVE"] as const;
 const CURRENCY_OPTIONS = ["VND", "USD"] as const;
-const USD_TO_VND_RATE = 24000; // Approximate exchange rate
 
 // Types
 type Status = typeof STATUS_OPTIONS[number];
@@ -81,6 +80,7 @@ export default function TicketPackagesPage() {
   const [currency, setCurrency] = useState<Currency>("VND");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<TicketPackageListItem | null>(null);
+  const [usdToVndRate, setUsdToVndRate] = useState<number>(24000); // fallback default
 
   // --- LOGIC METHODS ---
 
@@ -146,7 +146,7 @@ export default function TicketPackagesPage() {
     setLoading(true);
     try {
       // Convert price to VND for API
-      const priceInVND = currency === "USD" ? currentPackage.price * USD_TO_VND_RATE : currentPackage.price;
+      const priceInVND = currency === "USD" ? currentPackage.price * usdToVndRate : currentPackage.price;
       
       await apiRequest("/ticket-package", {
         method: "POST",
@@ -175,7 +175,7 @@ export default function TicketPackagesPage() {
     setLoading(true);
     try {
       // Convert price to VND for API
-      const priceInVND = currency === "USD" ? currentPackage.price * USD_TO_VND_RATE : currentPackage.price;
+      const priceInVND = currency === "USD" ? currentPackage.price * usdToVndRate : currentPackage.price;
       
       await apiRequest(`/ticket-package/${editingId}`, {
         method: "PUT",
@@ -256,7 +256,7 @@ export default function TicketPackagesPage() {
 
   // Format price display
   const formatPrice = useCallback((price: number): string => {
-    const displayPrice = currency === "USD" ? price / USD_TO_VND_RATE : price;
+    const displayPrice = currency === "USD" ? price / usdToVndRate : price;
     const currencySymbol = currency === "USD" ? "$" : "";
     const currencyUnit = currency === "VND" ? " VND" : "";
     
@@ -264,7 +264,7 @@ export default function TicketPackagesPage() {
       minimumFractionDigits: currency === "USD" ? 2 : 0,
       maximumFractionDigits: currency === "USD" ? 2 : 0,
     })}${currencyUnit}`;
-  }, [currency]);
+  }, [currency, usdToVndRate]);
 
   // --- HANDLER METHODS ---
 
@@ -333,6 +333,25 @@ export default function TicketPackagesPage() {
   useEffect(() => {
     fetchPackages("all");
   }, [fetchPackages]);
+
+  useEffect(() => {
+    fetch("https://api.getgeoapi.com/v2/currency/convert?api_key=05585d2dbe81b54873e6a5ec72b0ad7e423bbcc0&from=USD&to=VND&amount=1&format=json")
+      .then(res => res.json())
+      .then(data => {
+        if (
+          data &&
+          data.status === "success" &&
+          data.rates &&
+          data.rates.VND &&
+          data.rates.VND.rate
+        ) {
+          setUsdToVndRate(Number(data.rates.VND.rate));
+        }
+      })
+      .catch(() => {
+        setUsdToVndRate(26086.9826); // fallback
+      });
+  }, []);
 
   // --- RENDER METHODS ---
 
@@ -588,7 +607,7 @@ export default function TicketPackagesPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="price">Price ({currency}) *</Label>
+                <Label htmlFor="price">Price (VND) *</Label>
                 <Input
                   id="price"
                   type="number"
@@ -727,7 +746,7 @@ export default function TicketPackagesPage() {
           }}
         >
           <Edit className="w-4 h-4 mr-2" />
-          Edit Package
+          Edit Packag
         </Button>
         <Button variant="outline" onClick={handleBackToList}>
           Close

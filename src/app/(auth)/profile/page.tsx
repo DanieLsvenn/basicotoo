@@ -27,6 +27,7 @@ import {
   Camera,
 } from "lucide-react";
 import Cookies from "js-cookie";
+import { PurchasedFormsTab } from "@/components/PurchasedFormsTab";
 
 interface UserProfile {
   accountId: string;
@@ -94,6 +95,10 @@ export default function ProfilePage() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const refreshProfile = async () => {
+    await fetchProfile();
   };
 
   const fetchStats = async () => {
@@ -292,9 +297,10 @@ export default function ProfilePage() {
         </div>
 
         <Tabs defaultValue="overview" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="personal">Personal Info</TabsTrigger>
+            <TabsTrigger value="forms">My Forms</TabsTrigger>
             <TabsTrigger value="activity">Activity</TabsTrigger>
             <TabsTrigger value="settings">Settings</TabsTrigger>
           </TabsList>
@@ -348,7 +354,9 @@ export default function ProfilePage() {
                         {profile.email}
                       </span>
                     </div>
-                    <p className="text-sm text-muted-foreground">AccountId: {profile.accountId}</p>
+                    <p className="text-sm text-muted-foreground">
+                      AccountId: {profile.accountId}
+                    </p>
                   </div>
                   <Badge
                     variant="secondary"
@@ -629,6 +637,10 @@ export default function ProfilePage() {
                 </div>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="forms" className="space-y-6">
+            <PurchasedFormsTab customerId={profile.accountId} />
           </TabsContent>
         </Tabs>
       </div>

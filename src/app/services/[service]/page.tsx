@@ -20,6 +20,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 import Image from "next/image";
+import { toast } from "sonner";
+import Cookies from "js-cookie";
 
 // Helper to generate the slug from the service name
 function getServiceSlug(serviceName: string): string {
@@ -99,6 +101,16 @@ interface FormTemplate {
   status?: string;
 }
 
+interface PurchaseFormRequest {
+  userId: string;
+  totalPrice: number;
+  orderDetails: {
+    formTemplateId: string;
+    quantity: number;
+    price: number;
+  }[];
+}
+
 interface Lawyer {
   lawyerId: string;
   fullName: string;
@@ -121,7 +133,10 @@ function LawyerCard({ lawyer, serviceId, serviceName }: LawyerCardProps) {
         <div className="flex items-start space-x-4">
           {/* Avatar */}
           <Avatar className="h-16 w-16 border-2 border-gray-100">
-            <AvatarImage src={lawyer.image} alt={lawyer.fullName} />
+            {/* Fix: Only render AvatarImage if lawyer.image exists and is not empty */}
+            {lawyer.image && lawyer.image.trim() !== "" ? (
+              <AvatarImage src={lawyer.image} alt={lawyer.fullName} />
+            ) : null}
             <AvatarFallback className="text-lg font-semibold bg-blue-50 text-blue-600">
               {getInitials(lawyer.fullName)}
             </AvatarFallback>
@@ -176,12 +191,30 @@ function LawyerCard({ lawyer, serviceId, serviceName }: LawyerCardProps) {
 }
 
 interface FormTemplateCardProps {
-  template: FormTemplate;
+  template: FormTemplate & { price: number };
+  userTickets: number;
+  onPurchase: (templateId: string, price: number) => void;
 }
 
-function FormTemplateCard({ template }: FormTemplateCardProps) {
+function FormTemplateCard({
+  template,
+  userTickets,
+  onPurchase,
+}: FormTemplateCardProps) {
+  const [isPurchasing, setIsPurchasing] = useState(false);
+
+  // Determine if the user can afford the template
+  const canAfford = userTickets >= template.price;
+
   const getTemplateId = (template: FormTemplate): string => {
-    return template.formTemplateId || template.id || template.serviceId;
+    const id = template.formTemplateId || template.id;
+
+    if (!id) {
+      console.error("Template missing ID:", template);
+      throw new Error("Template ID is required for purchase");
+    }
+
+    return id;
   };
 
   const getPredefinedDescription = (templateName: string): string => {
@@ -227,6 +260,33 @@ function FormTemplateCard({ template }: FormTemplateCardProps) {
     return "Professional legal document template for your business needs.";
   };
 
+  const handlePurchase = async () => {
+    const templateId = getTemplateId(template);
+    const templatePrice = template.price;
+
+    console.log("FormTemplateCard handlePurchase:", {
+      templateId,
+      templatePrice,
+      userTickets,
+      canAfford,
+      template,
+    });
+
+    if (userTickets < templatePrice) {
+      toast.error("Insufficient tickets", {
+        description: `You need ${templatePrice} tickets but only have ${userTickets}.`,
+      });
+      return;
+    }
+
+    setIsPurchasing(true);
+    try {
+      await onPurchase(templateId, templatePrice);
+    } finally {
+      setIsPurchasing(false);
+    }
+  };
+
   return (
     <Card className="group hover:shadow-lg transition-all duration-300 hover:border-blue-200">
       <div className="relative h-48 w-full overflow-hidden rounded-t-lg">
@@ -238,6 +298,12 @@ function FormTemplateCard({ template }: FormTemplateCardProps) {
             (e.target as HTMLImageElement).src = "/assets/DefaultDocument.png";
           }}
         />
+        {/* Price Badge */}
+        <div className="absolute top-3 right-3">
+          <Badge className="bg-green-600 text-white">
+            {template.price} tickets
+          </Badge>
+        </div>
       </div>
       <CardContent className="p-6">
         <div className="flex items-start justify-between mb-3">
@@ -271,7 +337,6 @@ function FormTemplateCard({ template }: FormTemplateCardProps) {
             size="sm"
             className="flex-1"
             onClick={() => {
-              // View template content in a modal or new page
               window.open(
                 `/templates/view/${getTemplateId(template)}`,
                 "_blank"
@@ -283,23 +348,229 @@ function FormTemplateCard({ template }: FormTemplateCardProps) {
           </Button>
           <Button
             size="sm"
-            className="flex-1 bg-blue-600 hover:bg-blue-700"
-            onClick={() => {
-              // Download or use template
-              window.open(
-                `/templates/download/${getTemplateId(template)}`,
-                "_blank"
-              );
-            }}
+            className={`flex-1 ${
+              canAfford
+                ? "bg-blue-600 hover:bg-blue-700"
+                : "bg-gray-400 cursor-not-allowed"
+            }`}
+            onClick={handlePurchase}
+            disabled={!canAfford || isPurchasing}
           >
-            <Download className="h-4 w-4 mr-1" />
-            Use Template
+            {isPurchasing ? (
+              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4 mr-1" />
+            )}
+            {isPurchasing ? "Purchasing..." : `Buy (${template.price} tickets)`}
           </Button>
         </div>
+
+        {!canAfford && (
+          <p className="text-xs text-red-500 mt-2 text-center">
+            Need {template.price - userTickets} more tickets
+          </p>
+        )}
       </CardContent>
     </Card>
   );
 }
+
+// Fixed purchaseFormTemplate function
+export const purchaseFormTemplate = async (
+  userId: string,
+  formTemplateId: string,
+  price: number
+): Promise<boolean> => {
+  try {
+    const token = Cookies.get("authToken");
+
+    if (!token) {
+      toast.error("Authentication required", {
+        description: "Please log in to purchase forms.",
+      });
+      return false;
+    }
+
+    if (!formTemplateId) {
+      toast.error("Invalid template", {
+        description: "Template ID is missing.",
+      });
+      return false;
+    }
+
+    // Additional validation and debugging
+    console.log("Purchase inputs BEFORE validation:", {
+      userId,
+      formTemplateId,
+      price,
+      userIdType: typeof userId,
+      priceType: typeof price,
+      formTemplateIdType: typeof formTemplateId,
+    });
+
+    // Ensure price is a number and greater than 0
+    const numericPrice = Number(price);
+    if (isNaN(numericPrice) || numericPrice <= 0) {
+      console.error("Invalid price detected:", { price, numericPrice });
+      toast.error("Invalid price", {
+        description: `Template price is invalid. Received: ${price}`,
+      });
+      return false;
+    }
+
+    // Log the numeric price to ensure it's correct
+    console.log("Numeric price after validation:", numericPrice);
+
+    const purchaseRequest: PurchaseFormRequest = {
+      userId: userId,
+      totalPrice: numericPrice, // Make sure this uses the validated numeric price
+      orderDetails: [
+        {
+          formTemplateId: formTemplateId,
+          quantity: 1,
+          price: numericPrice, // Make sure this also uses the validated numeric price
+        },
+      ],
+    };
+
+    console.log("Final purchase request object:", purchaseRequest);
+    console.log(
+      "Purchase request JSON:",
+      JSON.stringify(purchaseRequest, null, 2)
+    );
+
+    const response = await fetch(
+      "https://localhost:7024/api/orders/create-form",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(purchaseRequest),
+      }
+    );
+
+    const responseText = await response.text();
+    console.log("Purchase response status:", response.status);
+    console.log("Purchase response body:", responseText);
+
+    if (response.ok) {
+      toast.success("Form template purchased successfully!", {
+        description: "The form is now available in your profile.",
+      });
+      return true;
+    } else {
+      let errorData;
+      try {
+        errorData = JSON.parse(responseText);
+      } catch {
+        errorData = { message: responseText || "Unknown error" };
+      }
+
+      console.error("Purchase failed:", errorData);
+      toast.error("Purchase failed", {
+        description:
+          errorData.message || `HTTP ${response.status}: ${responseText}`,
+      });
+      return false;
+    }
+  } catch (error) {
+    console.error("Purchase error:", error);
+    toast.error("Purchase failed", {
+      description:
+        error instanceof Error ? error.message : "Please try again later.",
+    });
+    return false;
+  }
+};
+
+export const fetchFormTemplatesWithPrice = async (): Promise<any[]> => {
+  const endpoints = [
+    "https://localhost:7276/api/templates",
+    "https://localhost:7276/api/template?page=1",
+    "https://localhost:7276/api/templates-active",
+  ];
+
+  for (const endpoint of endpoints) {
+    try {
+      console.log(`Trying endpoint: ${endpoint}`);
+      const response = await fetch(endpoint);
+
+      if (response.ok) {
+        const templates = await response.json();
+        console.log(
+          `Success with ${endpoint}, got ${templates.length} templates`
+        );
+
+        // Ensure all templates have required fields
+        interface RawTemplate {
+          formTemplateId?: string;
+          id?: string;
+          serviceId?: string;
+          formTemplateName?: string;
+          formTemplateData?: string;
+          status?: string;
+          price?: number;
+          [key: string]: any;
+        }
+
+        const validTemplates: (FormTemplate & { price: number })[] = (
+          templates as RawTemplate[]
+        ).filter(
+          (t) =>
+            t.formTemplateId &&
+            t.formTemplateName &&
+            typeof t.price === "number"
+        ) as (FormTemplate & { price: number })[];
+
+        if (validTemplates.length > 0) {
+          return validTemplates;
+        }
+      }
+    } catch (error) {
+      console.warn(`Endpoint ${endpoint} failed:`, error);
+      continue;
+    }
+  }
+
+  return [];
+};
+
+export const getUserProfile = async (): Promise<{
+  accountTicketRequest: number;
+  accountId: string;
+} | null> => {
+  try {
+    const token = Cookies.get("authToken");
+    if (!token) {
+      console.warn("No auth token found");
+      return null;
+    }
+
+    const response = await fetch("https://localhost:7218/api/Account/profile", {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (response.ok) {
+      const profile = await response.json();
+      console.log("Profile fetched:", profile);
+      return {
+        accountTicketRequest: profile.accountTicketRequest || 0,
+        accountId: profile.accountId,
+      };
+    } else {
+      const errorText = await response.text();
+      console.error("Profile fetch failed:", response.status, errorText);
+    }
+    return null;
+  } catch (error) {
+    console.error("Failed to fetch user profile:", error);
+    return null;
+  }
+};
 
 export default function UserServiceDetailPage() {
   const params = useParams();
@@ -307,7 +578,9 @@ export default function UserServiceDetailPage() {
   const serviceSlug = params.service as string;
 
   const [service, setService] = useState<Service | null>(null);
-  const [formTemplate, setFormTemplate] = useState<FormTemplate | null>(null);
+  const [formTemplate, setFormTemplate] = useState<
+    (FormTemplate & { price: number }) | null
+  >(null);
   const [lawyers, setLawyers] = useState<Lawyer[]>([]);
   const [loading, setLoading] = useState(true);
   const [lawyersLoading, setLawyersLoading] = useState(false);
@@ -315,6 +588,77 @@ export default function UserServiceDetailPage() {
   const [contentType, setContentType] = useState<"service" | "template">(
     "service"
   );
+  const [userTickets, setUserTickets] = useState(0);
+  const [userAccountId, setUserAccountId] = useState<string>("");
+
+  const fetchUserProfile = useCallback(async () => {
+    const profileData = await getUserProfile();
+    if (profileData) {
+      setUserTickets(profileData.accountTicketRequest);
+      setUserAccountId(profileData.accountId);
+    }
+  }, []);
+
+  const handleFormPurchase = async (formTemplateId: string, price: number) => {
+    if (!userAccountId) {
+      toast.error("Please log in to purchase forms");
+      return;
+    }
+
+    // Additional validation and debugging
+    console.log("HandleFormPurchase called with:", {
+      formTemplateId,
+      price,
+      userAccountId,
+      userTickets,
+      priceType: typeof price,
+      templateIdType: typeof formTemplateId,
+    });
+
+    // Ensure we have valid values
+    if (!formTemplateId || formTemplateId.trim() === "") {
+      toast.error("Invalid template ID");
+      return;
+    }
+
+    // Make sure price is a number and valid
+    const numericPrice = Number(price);
+    if (isNaN(numericPrice) || numericPrice <= 0) {
+      console.error("Invalid price in handleFormPurchase:", {
+        price,
+        numericPrice,
+      });
+      toast.error("Invalid price", {
+        description: `Price must be a positive number. Received: ${price}`,
+      });
+      return;
+    }
+
+    if (userTickets < numericPrice) {
+      toast.error("Insufficient tickets", {
+        description: `You need ${numericPrice} tickets but only have ${userTickets}.`,
+      });
+      return;
+    }
+
+    console.log("About to call purchaseFormTemplate with:", {
+      userAccountId,
+      formTemplateId,
+      numericPrice,
+    });
+
+    const success = await purchaseFormTemplate(
+      userAccountId,
+      formTemplateId,
+      numericPrice // Pass the validated numeric price
+    );
+
+    if (success) {
+      // Refresh user tickets
+      console.log("Purchase successful, refreshing profile...");
+      await fetchUserProfile();
+    }
+  };
 
   const fetchServiceOrTemplate = useCallback(async () => {
     setLoading(true);
@@ -336,6 +680,12 @@ export default function UserServiceDetailPage() {
         );
 
         if (foundService) {
+          console.log(
+            "Found service:",
+            foundService.serviceName,
+            "-> slug:",
+            getServiceSlug(foundService.serviceName)
+          );
           setService(foundService);
           setContentType("service");
           setLoading(false);
@@ -343,17 +693,67 @@ export default function UserServiceDetailPage() {
         }
       }
 
-      // If not found in services, try form templates
-      const templateResponse = await fetch(
-        "https://localhost:7276/api/templates-active"
-      );
-      if (templateResponse.ok) {
-        const templateData: FormTemplate[] = await templateResponse.json();
+      // If not found in services, try form templates using the working endpoint
+      console.log("Service not found, trying templates...");
+
+      // Try multiple endpoints that work in your dashboard
+      let templateData: (FormTemplate & { price: number })[] = [];
+
+      try {
+        // First try the all templates endpoint (works in dashboard)
+        const templateResponse = await fetch(
+          "https://localhost:7276/api/templates"
+        );
+        if (templateResponse.ok) {
+          templateData = await templateResponse.json();
+        }
+      } catch (err) {
+        console.warn("All templates endpoint failed, trying paginated:", err);
+      }
+
+      // If that fails, try the paginated endpoint
+      if (templateData.length === 0) {
+        try {
+          const paginatedResponse = await fetch(
+            "https://localhost:7276/api/template?page=1"
+          );
+          if (paginatedResponse.ok) {
+            templateData = await paginatedResponse.json();
+          }
+        } catch (err) {
+          console.warn("Paginated endpoint failed:", err);
+        }
+      }
+
+      // If that also fails, try active templates endpoint
+      if (templateData.length === 0) {
+        try {
+          const activeResponse = await fetch(
+            "https://localhost:7276/api/templates-active"
+          );
+          if (activeResponse.ok) {
+            templateData = await activeResponse.json();
+          }
+        } catch (err) {
+          console.warn("Active templates endpoint failed:", err);
+        }
+      }
+
+      console.log("Template data received:", templateData);
+      console.log("Looking for serviceSlug:", serviceSlug);
+
+      if (templateData.length > 0) {
         const foundTemplate = templateData.find(
           (t) => getServiceSlug(t.formTemplateName) === serviceSlug
         );
 
         if (foundTemplate) {
+          console.log(
+            "Found template:",
+            foundTemplate.formTemplateName,
+            "-> slug:",
+            getServiceSlug(foundTemplate.formTemplateName)
+          );
           setFormTemplate(foundTemplate);
           setContentType("template");
           setLoading(false);
@@ -361,8 +761,8 @@ export default function UserServiceDetailPage() {
         }
       }
 
-      // If neither found, throw error
-      throw new Error("Service or template not found");
+      // If still not found, set a more specific error
+      setError("Service or template not found");
     } catch (error) {
       console.error("Failed to fetch service or template:", error);
       setError(error instanceof Error ? error.message : "An error occurred");
@@ -370,6 +770,11 @@ export default function UserServiceDetailPage() {
       setLoading(false);
     }
   }, [serviceSlug]);
+
+  useEffect(() => {
+    fetchServiceOrTemplate();
+    fetchUserProfile();
+  }, [fetchServiceOrTemplate, fetchUserProfile]);
 
   const fetchLawyers = useCallback(async (serviceId: string) => {
     setLawyersLoading(true);
@@ -391,10 +796,6 @@ export default function UserServiceDetailPage() {
       setLawyersLoading(false);
     }
   }, []);
-
-  useEffect(() => {
-    fetchServiceOrTemplate();
-  }, [fetchServiceOrTemplate]);
 
   useEffect(() => {
     if (service && contentType === "service") {
@@ -466,10 +867,10 @@ export default function UserServiceDetailPage() {
                     src={getPlaceholderImage(formTemplate.formTemplateName)}
                     alt={formTemplate.formTemplateName}
                     className="h-full w-full object-cover"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).src =
-                        "/assets/DefaultDocument.png";
-                    }}
+                    // onError={(e) => {
+                    //   (e.target as HTMLImageElement).src =
+                    //     "/assets/DefaultDocument.png";
+                    // }}
                   />
                 </div>
               </div>
@@ -523,26 +924,9 @@ export default function UserServiceDetailPage() {
                 {/* Action Buttons */}
                 <div className="flex gap-4 mt-6">
                   <Button
-                    size="lg"
-                    className="bg-blue-600 hover:bg-blue-700"
-                    onClick={() => {
-                      // Implement template download/use functionality
-                      window.open(
-                        `/templates/download/${
-                          formTemplate.formTemplateId || formTemplate.id
-                        }`,
-                        "_blank"
-                      );
-                    }}
-                  >
-                    <Download className="h-5 w-5 mr-2" />
-                    Use This Template
-                  </Button>
-                  <Button
                     variant="outline"
                     size="lg"
                     onClick={() => {
-                      // Implement template preview functionality
                       window.open(
                         `/templates/preview/${
                           formTemplate.formTemplateId || formTemplate.id
@@ -552,7 +936,25 @@ export default function UserServiceDetailPage() {
                     }}
                   >
                     <Eye className="h-5 w-5 mr-2" />
-                    Full Preview
+                    Preview Template
+                  </Button>
+                  <Button
+                    size="lg"
+                    className={`${
+                      userTickets >= formTemplate.price
+                        ? "bg-blue-600 hover:bg-blue-700"
+                        : "bg-gray-400 cursor-not-allowed"
+                    }`}
+                    onClick={() =>
+                      handleFormPurchase(
+                        formTemplate.formTemplateId || formTemplate.id || "",
+                        formTemplate.price
+                      )
+                    }
+                    disabled={userTickets < formTemplate.price}
+                  >
+                    <Download className="h-5 w-5 mr-2" />
+                    Buy Template ({formTemplate.price} tickets)
                   </Button>
                 </div>
               </div>
@@ -563,7 +965,7 @@ export default function UserServiceDetailPage() {
     );
   }
 
-  // Render service view (existing code)
+  // Render service view
   if (contentType === "service" && service) {
     return (
       <MaxWidthWrapper>

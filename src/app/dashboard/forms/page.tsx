@@ -35,6 +35,7 @@ interface FormTemplate {
   serviceId: string;
   formTemplateName: string;
   formTemplateData: string;
+  price: number;
   status?: string;
 }
 
@@ -52,6 +53,7 @@ export default function FormTemplatesPage() {
     serviceId: "",
     formTemplateName: "",
     formTemplateData: "<p>Start creating your template...</p>",
+    price: 0,
     status: "active",
   });
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -146,6 +148,7 @@ export default function FormTemplatesPage() {
         formTemplateName: data.formTemplateName || "",
         formTemplateData:
           data.formTemplateData || "<p>No content available</p>",
+        price: data.price || 0,
         status: data.status || "ACTIVE", // Note: API shows "ACTIVE" in caps
       });
     } catch (err) {
@@ -162,6 +165,11 @@ export default function FormTemplatesPage() {
       !currentTemplate.serviceId.trim()
     ) {
       setError("Template name and service ID are required");
+      return;
+    }
+
+    if (currentTemplate.price <= 0) {
+      setError("Price must be greater than zero");
       return;
     }
 
@@ -200,6 +208,11 @@ export default function FormTemplatesPage() {
       !currentTemplate.serviceId.trim()
     ) {
       setError("Template name and service ID are required");
+      return;
+    }
+
+    if (currentTemplate.price <= 0) {
+      setError("Price must be greater than zero");
       return;
     }
 
@@ -269,6 +282,7 @@ export default function FormTemplatesPage() {
       serviceId: "",
       formTemplateName: "",
       formTemplateData: "<p>Start creating your template...</p>",
+      price: 0,
       status: "active",
     });
     setEditingId(null);
@@ -385,6 +399,9 @@ export default function FormTemplatesPage() {
                     </CardTitle>
                     <CardDescription>
                       Service ID: {template.serviceId}
+                    </CardDescription>
+                    <CardDescription>
+                      Price: ${template.price?.toFixed(2) || "0.00"}
                     </CardDescription>
                     {/* Debug info - remove in production */}
                     <CardDescription className="text-xs text-muted-foreground">
@@ -558,30 +575,54 @@ export default function FormTemplatesPage() {
             </div>
           </div>
 
-          {currentTemplate.status !== undefined && (
+          <div className="grid md:grid-cols-2 gap-6">
             <div className="space-y-2">
-              <Label htmlFor="status">Status</Label>
-              <Select
-                value={currentTemplate.status}
-                onValueChange={(value) =>
+              <Label htmlFor="price">Price *</Label>
+              <Input
+                id="price"
+                type="number"
+                min="0.01"
+                step="0.01"
+                value={currentTemplate.price}
+                onChange={(e) =>
                   setCurrentTemplate((prev) => ({
                     ...prev,
-                    status: value,
+                    price: parseFloat(e.target.value) || 0,
                   }))
                 }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ACTIVE">Active</SelectItem>
-                  <SelectItem value="INACTIVE">Inactive</SelectItem>
-                  <SelectItem value="active">active</SelectItem>
-                  <SelectItem value="inactive">inactive</SelectItem>
-                </SelectContent>
-              </Select>
+                placeholder="0.00"
+                required
+              />
+              <p className="text-sm text-muted-foreground">
+                Price must be greater than zero
+              </p>
             </div>
-          )}
+
+            {currentTemplate.status !== undefined && (
+              <div className="space-y-2">
+                <Label htmlFor="status">Status</Label>
+                <Select
+                  value={currentTemplate.status}
+                  onValueChange={(value) =>
+                    setCurrentTemplate((prev) => ({
+                      ...prev,
+                      status: value,
+                    }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ACTIVE">Active</SelectItem>
+                    <SelectItem value="INACTIVE">Inactive</SelectItem>
+                    <SelectItem value="active">active</SelectItem>
+                    <SelectItem value="inactive">inactive</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
 
           <div className="space-y-2">
             <Label>Template Content</Label>
@@ -602,7 +643,8 @@ export default function FormTemplatesPage() {
           disabled={
             loading ||
             !currentTemplate.formTemplateName.trim() ||
-            !currentTemplate.serviceId.trim()
+            !currentTemplate.serviceId.trim() ||
+            currentTemplate.price <= 0
           }
         >
           {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
@@ -666,24 +708,35 @@ export default function FormTemplatesPage() {
             </div>
           </div>
 
-          {currentTemplate.status && (
+          <div className="grid md:grid-cols-2 gap-6">
             <div className="space-y-1">
               <Label className="text-sm font-medium text-muted-foreground">
-                Status
+                Price
               </Label>
-              <div>
-                <Badge
-                  variant={
-                    currentTemplate.status.toLowerCase() === "active"
-                      ? "default"
-                      : "secondary"
-                  }
-                >
-                  {currentTemplate.status}
-                </Badge>
-              </div>
+              <p className="font-medium">
+                ${currentTemplate.price?.toFixed(2) || "0.00"}
+              </p>
             </div>
-          )}
+
+            {currentTemplate.status && (
+              <div className="space-y-1">
+                <Label className="text-sm font-medium text-muted-foreground">
+                  Status
+                </Label>
+                <div>
+                  <Badge
+                    variant={
+                      currentTemplate.status.toLowerCase() === "active"
+                        ? "default"
+                        : "secondary"
+                    }
+                  >
+                    {currentTemplate.status}
+                  </Badge>
+                </div>
+              </div>
+            )}
+          </div>
 
           <div className="space-y-2">
             <Label className="text-sm font-medium text-muted-foreground">
@@ -714,6 +767,7 @@ export default function FormTemplatesPage() {
                 serviceId: currentTemplate.serviceId,
                 formTemplateName: currentTemplate.formTemplateName,
                 formTemplateData: currentTemplate.formTemplateData,
+                price: currentTemplate.price,
                 status: currentTemplate.status,
               } as TemplateListItem);
             handleEdit(template);

@@ -353,11 +353,16 @@ export default function FormTemplatesPage() {
     }
   }, [handleInputChange]);
 
+  // Handle filter mode change
+  const handleFilterChange = useCallback((mode: FilterMode) => {
+    fetchTemplates(mode);
+  }, [fetchTemplates]);
+
   // Effects
   useEffect(() => {
     fetchTemplates("all");
     fetchServices();
-  }, []);
+  }, [fetchTemplates, fetchServices]);
 
   useEffect(() => {
     fetch("https://api.getgeoapi.com/v2/currency/convert?api_key=05585d2dbe81b54873e6a5ec72b0ad7e423bbcc0&from=USD&to=VND&amount=1&format=json")
@@ -408,14 +413,14 @@ export default function FormTemplatesPage() {
             </SelectContent>
           </Select>
           <Button
-            onClick={() => fetchTemplates("active")}
+            onClick={() => handleFilterChange("active")}
             variant={filterMode === "active" ? "default" : "outline"}
             disabled={loading}
           >
             Show Active Only
           </Button>
           <Button
-            onClick={() => fetchTemplates("all")}
+            onClick={() => handleFilterChange("all")}
             variant={filterMode === "all" ? "default" : "outline"}
             disabled={loading}
           >
@@ -445,16 +450,16 @@ export default function FormTemplatesPage() {
 
       {/* Templates Grid */}
       {!loading && templates.length > 0 && (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
           {templates.map((template, index) => (
             <Card
               key={getTemplateId(template) || index}
               className="hover:shadow-md transition-shadow h-full flex flex-col overflow-hidden"
             >
               <CardHeader className="flex-1 min-h-0 pb-3">
-                <div className="flex items-start justify-between">
-                  <div className="space-y-2 flex-1 min-w-0">
-                    <CardTitle className="text-base sm:text-lg leading-tight">
+                <div className="space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <CardTitle className="text-base sm:text-lg leading-tight flex-1">
                       <span
                         className="block break-words hyphens-auto line-clamp-2"
                         style={{ wordBreak: 'break-word' }}
@@ -463,64 +468,64 @@ export default function FormTemplatesPage() {
                         {template.formTemplateName}
                       </span>
                     </CardTitle>
-                    <CardDescription className="text-xs sm:text-sm">
-                      <span
-                        className="block break-words hyphens-auto line-clamp-1"
-                        style={{ wordBreak: 'break-word' }}
-                        title={`Service: ${getServiceName(template.serviceId)}`}
+                    {template.status && (
+                      <Badge
+                        variant={
+                          template.status.toUpperCase() === "ACTIVE"
+                            ? "default"
+                            : "secondary"
+                        }
+                        className="text-xs shrink-0"
                       >
-                        Service: {getServiceName(template.serviceId)}
-                      </span>
-                    </CardDescription>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs sm:text-sm font-medium text-green-600 break-words">
-                        {formatPrice(template.price || 0)}
-                      </span>
-                    </div>
+                        {template.status.toUpperCase()}
+                      </Badge>
+                    )}
                   </div>
-                  {template.status && (
-                    <Badge
-                      variant={
-                        template.status.toUpperCase() === "ACTIVE"
-                          ? "default"
-                          : "secondary"
-                      }
-                      className="text-xs shrink-0"
+                  <CardDescription className="text-xs sm:text-sm">
+                    <span
+                      className="block break-words hyphens-auto line-clamp-1"
+                      style={{ wordBreak: 'break-word' }}
+                      title={`Service: ${getServiceName(template.serviceId)}`}
                     >
-                      {template.status.toUpperCase()}
-                    </Badge>
-                  )}
+                      Service: {getServiceName(template.serviceId)}
+                    </span>
+                  </CardDescription>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs sm:text-sm font-medium text-green-600 break-words">
+                      {formatPrice(template.price || 0)}
+                    </span>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="pt-0">
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row gap-2">
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => handleView(template)}
-                    className="flex-1"
+                    className="flex-1 min-w-0 text-xs sm:text-sm"
                   >
-                    <Eye className="w-4 h-4 mr-1" />
-                    View
+                    <Eye className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
+                    <span className="truncate">View</span>
                   </Button>
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => handleEdit(template)}
-                    className="flex-1"
+                    className="flex-1 min-w-0 text-xs sm:text-sm"
                   >
-                    <Edit className="w-4 h-4 mr-1" />
-                    Edit
+                    <Edit className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
+                    <span className="truncate">Edit</span>
                   </Button>
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => handleDelete(template)}
                     disabled={loading}
-                    className="flex-1 text-destructive hover:text-destructive"
+                    className="flex-1 min-w-0 text-xs sm:text-sm text-destructive hover:text-destructive"
                   >
-                    <Trash2 className="w-4 h-4 mr-1" />
-                    Delete
+                    <Trash2 className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
+                    <span className="truncate">Delete</span>
                   </Button>
                 </div>
               </CardContent>
@@ -690,7 +695,7 @@ export default function FormTemplatesPage() {
   );
 
   const renderTemplateView = () => (
-    <div className="max-w-2xl mx-auto space-y-6">
+    <div className="max-w-4xl mx-auto space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
         <Button variant="outline" onClick={handleBackToList}>
@@ -708,18 +713,20 @@ export default function FormTemplatesPage() {
       {/* Template Details */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            {formData.formTemplateName || "Unnamed Template"}
+          <div className="flex items-start justify-between gap-4">
+            <CardTitle>{formData.formTemplateName || "Unnamed Template"}</CardTitle>
             {formData.status && (
               <Badge
                 variant={
-                  formData.status === "ACTIVE" ? "default" : "secondary"
+                  formData.status.toUpperCase() === "ACTIVE"
+                    ? "default"
+                    : "secondary"
                 }
               >
-                {formData.status}
+                {formData.status.toUpperCase()}
               </Badge>
             )}
-          </CardTitle>
+          </div>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="grid md:grid-cols-2 gap-6">
@@ -772,7 +779,7 @@ export default function FormTemplatesPage() {
           }}
         >
           <Edit className="w-4 h-4 mr-2" />
-          Edit Templat
+          Edit Template
         </Button>
         <Button variant="outline" onClick={handleBackToList}>
           Close

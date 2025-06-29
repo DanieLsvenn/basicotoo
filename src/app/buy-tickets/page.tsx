@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Loader2, Check, Star, Package, ArrowRight } from "lucide-react";
+import { Loader2, Package, ArrowRight, ChevronDown, ChevronUp } from "lucide-react";
 
 // Constants
 const API_BASE_URL = "https://localhost:7103/api";
@@ -15,13 +15,47 @@ interface TicketPackage {
   status: string;
 }
 
+interface FAQItem {
+  question: string;
+  answer: string;
+}
+
 const BuyTicketsPage = () => {
   // --- STATE MANAGEMENT ---
   const [packages, setPackages] = useState<TicketPackage[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedPackage, setSelectedPackage] = useState<string | null>(null);
-  const [usdToVndRate, setUsdToVndRate] = useState<number>(24000); // fallback default
+  const [usdToVndRate, setUsdToVndRate] = useState<number>(24000);
+  const [openFAQ, setOpenFAQ] = useState<number | null>(null);
+
+  // FAQ Data
+  const faqData: FAQItem[] = [
+    {
+      question: "What are tickets used for?",
+      answer: "Tickets are used to access legal forms and documents (divorce forms, real estate contracts, etc.), contact our legal staff, and request various legal services through our platform."
+    },
+    {
+      question: "Do tickets expire?",
+      answer: "No, your tickets never expire. Once purchased, they remain in your account until you use them."
+    },
+    {
+      question: "Can I get a refund for unused tickets?",
+      answer: "Tickets are non-refundable once purchased. However, if you have technical issues or concerns, please contact our support team for assistance."
+    },
+    {
+      question: "How many tickets do I need for different services?",
+      answer: "Basic legal forms typically cost 1-3 tickets, complex documents may require 5-10 tickets, and staff consultations usually cost 2-5 tickets depending on the complexity."
+    },
+    {
+      question: "Is there a minimum purchase amount?",
+      answer: "No, you can purchase any of our available ticket packages. We offer various package sizes to suit different needs and budgets."
+    },
+    {
+      question: "What payment methods do you accept?",
+      answer: "We accept all major credit cards, PayPal, and bank transfers. All payments are processed securely through our encrypted payment system."
+    }
+  ];
 
   // --- LOGIC METHODS ---
 
@@ -58,8 +92,8 @@ const BuyTicketsPage = () => {
     }
   }, [apiRequest]);
 
-  // Get most popular package (best value)
-  const getMostPopular = useCallback(() => {
+  // Get best value package (lowest price per ticket)
+  const getBestValue = useCallback(() => {
     if (packages.length === 0) return null;
     
     return packages.reduce((best, current) => {
@@ -69,25 +103,14 @@ const BuyTicketsPage = () => {
     });
   }, [packages]);
 
-  // Get package features based on request amount
-  const getPackageFeatures = useCallback((pkg: TicketPackage) => {
-    const features = [
-      `${pkg.requestAmount.toLocaleString()} Tickets`,
-      "24/7 Customer support",
-      "No expiration date",
-    ];
-
-    if (pkg.requestAmount >= 50) {
-      features.push("Priority processing");
-    }
-
-    if (pkg.requestAmount >= 75) {
-      features.push("Dedicated account manager");
-      features.push("Custom integrations");
-    }
-
-    return features;
-  }, []);
+  // Get most popular package (cheapest total price)
+  const getMostPopular = useCallback(() => {
+    if (packages.length === 0) return null;
+    
+    return packages.reduce((cheapest, current) => {
+      return current.price < cheapest.price ? current : cheapest;
+    });
+  }, [packages]);
 
   // Convert VND price to USD
   const convertToUSD = useCallback((vndPrice: number): number => {
@@ -108,12 +131,10 @@ const BuyTicketsPage = () => {
   // --- HANDLER METHODS ---
 
   // Handle package purchase
-  const handlePurchase = useCallback((packageId: string, packageName: string) => {
+  const handlePurchase = useCallback((packageId: string) => {
     setSelectedPackage(packageId);
-    // Here you would integrate with your payment system
-    alert(`Purchasing ${packageName}...`);
-    // Reset selection after a delay to simulate processing
-    setTimeout(() => setSelectedPackage(null), 2000);
+    // Navigate to checkout page
+    window.location.href = `/checkout/${packageId}`;
   }, []);
 
   // Handle retry on error
@@ -121,11 +142,10 @@ const BuyTicketsPage = () => {
     fetchActivePackages();
   }, [fetchActivePackages]);
 
-  // Handle contact sales
-  const handleContactSales = useCallback(() => {
-    // Here you would open a contact form or redirect to sales page
-    alert("Contact sales functionality would be implemented here");
-  }, []);
+  // Toggle FAQ
+  const toggleFAQ = useCallback((index: number) => {
+    setOpenFAQ(openFAQ === index ? null : index);
+  }, [openFAQ]);
 
   // --- EFFECTS ---
   useEffect(() => {
@@ -148,7 +168,7 @@ const BuyTicketsPage = () => {
         }
       })
       .catch(() => {
-        setUsdToVndRate(26086.9826); // fallback rate
+        setUsdToVndRate(26086.9826);
       });
   }, []);
 
@@ -193,145 +213,199 @@ const BuyTicketsPage = () => {
     </div>
   );
 
-  const renderPackageCard = (pkg: TicketPackage) => {
-    const mostPopular = getMostPopular();
-    const isPopular = mostPopular?.ticketPackageId === pkg.ticketPackageId;
+  const renderPackageItem = (pkg: TicketPackage, isFeatured = false, isPopular = false) => {
     const usdPrice = convertToUSD(pkg.price);
-    const pricePerRequest = usdPrice / pkg.requestAmount;
-    const features = getPackageFeatures(pkg);
+    const pricePerTicket = usdPrice / pkg.requestAmount;
     const isProcessing = selectedPackage === pkg.ticketPackageId;
 
-    return (
-      <div
-        key={pkg.ticketPackageId}
-        className={`relative bg-white rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 ${
-          isPopular
-            ? "ring-4 ring-blue-500 ring-opacity-50 scale-105"
-            : ""
-        }`}
-      >
-        {/* Popular Badge */}
-        {isPopular && (
-          <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
-            <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-2 rounded-full text-sm font-semibold flex items-center gap-1">
-              <Star className="h-4 w-4" />
-              Most Popular
-            </div>
-          </div>
-        )}
+    let borderClass = "border border-gray-200";
+    let badgeElement = null;
 
-        <div className="p-8">
-          {/* Package Header */}
-          <div className="text-center mb-8">
-            <h3 className="text-2xl font-bold text-gray-900 mb-2">
-              {pkg.ticketPackageName}
-            </h3>
-            <div className="mb-4">
-              <span className="text-5xl font-bold text-gray-900">
-                {formatUSDPrice(pkg.price)}
-              </span>
-            </div>
-            <div className="text-sm text-gray-500">
-              <span className="bg-gray-100 px-3 py-1 rounded-full">
-                ${pricePerRequest.toFixed(2)} per request
-              </span>
-            </div>
-          </div>
-
-          {/* Features */}
-          <div className="mb-8">
-            <ul className="space-y-4">
-              {features.map((feature, index) => (
-                <li key={index} className="flex items-start gap-3">
-                  <Check className="h-5 w-5 text-green-500 flex-shrink-0 mt-0.5" />
-                  <span className="text-gray-700">{feature}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* Purchase Button */}
-          <button
-            onClick={() => handlePurchase(pkg.ticketPackageId, pkg.ticketPackageName)}
-            disabled={isProcessing}
-            className={`w-full py-4 px-6 rounded-xl font-semibold text-lg transition-all duration-200 flex items-center justify-center gap-2 ${
-              isPopular
-                ? "bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-lg"
-                : "bg-gray-900 hover:bg-gray-800 text-white"
-            } ${
-              isProcessing
-                ? "opacity-75 cursor-not-allowed"
-                : "hover:shadow-lg transform hover:scale-105"
-            }`}
-          >
-            {isProcessing ? (
-              <>
-                <Loader2 className="h-5 w-5 animate-spin" />
-                Processing...
-              </>
-            ) : (
-              <>
-                Purchase {pkg.ticketPackageName}
-                <ArrowRight className="h-5 w-5" />
-              </>
-            )}
-          </button>
+    if (isFeatured) {
+      borderClass = "border-2 bg-gradient-to-r from-blue-500 to-purple-600 p-0.5";
+      badgeElement = (
+        <div className="absolute -top-3 left-6 bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-1 rounded-full text-sm font-medium">
+          Best Value
         </div>
+      );
+    } else if (isPopular) {
+      borderClass = "border-2 bg-gradient-to-r from-orange-400 to-yellow-500 p-0.5";
+      badgeElement = (
+        <div className="absolute -top-3 left-6 bg-gradient-to-r from-orange-400 to-yellow-500 text-white px-4 py-1 rounded-full text-sm font-medium">
+          Most Popular
+        </div>
+      );
+    }
+
+    const content = (
+      <div className="bg-white rounded-lg p-6 flex items-center justify-between hover:shadow-md transition-shadow relative">
+        {badgeElement}
+        
+        <div className="flex-1">
+          <h3 className="text-xl font-semibold text-gray-900 mb-2">
+            {pkg.ticketPackageName}
+          </h3>
+          <div className="flex items-center gap-4 text-gray-600">
+            <span>{pkg.requestAmount.toLocaleString()} Tickets</span>
+            <span className="text-gray-400">•</span>
+            <span>${pricePerTicket.toFixed(2)} per ticket</span>
+          </div>
+        </div>
+
+        <div className="text-right mr-6">
+          <div className="text-2xl font-bold text-gray-900">
+            {formatUSDPrice(pkg.price)}
+          </div>
+        </div>
+
+        <button
+          onClick={() => handlePurchase(pkg.ticketPackageId)}
+          disabled={isProcessing}
+          className={`px-6 py-3 rounded-lg font-medium transition-all duration-200 flex items-center gap-2 ${
+            isProcessing
+              ? "bg-gray-400 text-white cursor-not-allowed"
+              : "bg-gray-900 hover:bg-gray-800 text-white hover:shadow-lg"
+          }`}
+        >
+          {isProcessing ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Processing...
+            </>
+          ) : (
+            <>
+              Buy Now
+              <ArrowRight className="h-4 w-4" />
+            </>
+          )}
+        </button>
+      </div>
+    );
+
+    if (isFeatured || isPopular) {
+      return (
+        <div key={pkg.ticketPackageId} className={`relative rounded-lg ${borderClass}`}>
+          {content}
+        </div>
+      );
+    }
+
+    return (
+      <div key={pkg.ticketPackageId} className={`relative rounded-lg ${borderClass}`}>
+        {content}
       </div>
     );
   };
 
   const renderHeader = () => (
-    <div className="pt-16 pb-8 px-4 sm:px-6 lg:px-8">
+    <div className="pt-16 pb-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-4xl mx-auto text-center">
         <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
-          Choose Your Perfect Plan
+          Buy Legal Service Tickets
         </h1>
-        <p className="text-lg text-gray-500">
-          All plans include unlimited access with no hidden fees
+        <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+          Purchase tickets to access legal forms, documents, and professional consultation services. 
+          Choose the package that best fits your needs.
         </p>
       </div>
     </div>
   );
 
-  const renderPricingSection = () => (
-    <div className="px-4 sm:px-6 lg:px-8 pb-16">
-      <div className="max-w-6xl mx-auto">
-        {packages.length === 0 
-          ? renderEmptyState()
-          : (
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 lg:gap-6">
-              {packages.map(renderPackageCard)}
+  const renderPackagesSection = () => {
+    if (packages.length === 0) return renderEmptyState();
+
+    const bestValue = getBestValue();
+    const mostPopular = getMostPopular();
+
+    // Separate featured packages from regular ones
+    const featuredPackages = packages.filter(pkg => 
+      pkg.ticketPackageId === bestValue?.ticketPackageId || 
+      pkg.ticketPackageId === mostPopular?.ticketPackageId
+    );
+
+    const regularPackages = packages.filter(pkg => 
+      pkg.ticketPackageId !== bestValue?.ticketPackageId && 
+      pkg.ticketPackageId !== mostPopular?.ticketPackageId
+    );
+
+    return (
+      <div className="px-4 sm:px-6 lg:px-8 pb-16">
+        <div className="max-w-4xl mx-auto">
+          {/* Featured Packages */}
+          {featuredPackages.length > 0 && (
+            <div className="mb-8">
+              <h2 className="text-2xl font-semibold text-gray-900 mb-6">Featured Packages</h2>
+              <div className="space-y-4">
+                {featuredPackages.map(pkg => 
+                  renderPackageItem(
+                    pkg, 
+                    pkg.ticketPackageId === bestValue?.ticketPackageId,
+                    pkg.ticketPackageId === mostPopular?.ticketPackageId
+                  )
+                )}
+              </div>
             </div>
-          )
-        }
-      </div>
-    </div>
-  );
+          )}
 
-  const renderCTASection = () => (
-    <div className="bg-gray-900 text-white py-16">
-      <div className="max-w-4xl mx-auto text-center px-4 sm:px-6 lg:px-8">
-        <h2 className="text-3xl font-bold mb-4">Need a custom solution?</h2>
-        <p className="text-xl text-gray-300 mb-8">
-          Contact our sales team for enterprise pricing and custom packages
-          tailored to your needs.
-        </p>
-        <button 
-          onClick={handleContactSales}
-          className="bg-white text-gray-900 px-8 py-4 rounded-xl font-semibold hover:bg-gray-100 transition-colors"
-        >
-          Contact Sales
-        </button>
+          {/* Regular Packages */}
+          {regularPackages.length > 0 && (
+            <div>
+              <h2 className="text-2xl font-semibold text-gray-900 mb-6">
+                {featuredPackages.length > 0 ? "More Options" : "Available Packages"}
+              </h2>
+              <div className="space-y-4">
+                {regularPackages.map(pkg => renderPackageItem(pkg))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const renderFAQSection = () => (
+    <div className="bg-gray-50 py-16">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="text-center mb-12">
+          <h2 className="text-3xl font-bold text-gray-900 mb-4">
+            Frequently Asked Questions
+          </h2>
+          <p className="text-lg text-gray-600">
+            Get answers to common questions about our ticket system
+          </p>
+        </div>
+
+        <div className="space-y-4">
+          {faqData.map((faq, index) => (
+            <div key={index} className="bg-white rounded-lg shadow-sm border border-gray-200">
+              <button
+                onClick={() => toggleFAQ(index)}
+                className="w-full px-6 py-4 text-left flex items-center justify-between hover:bg-gray-50 transition-colors"
+              >
+                <span className="font-medium text-gray-900">{faq.question}</span>
+                {openFAQ === index ? (
+                  <ChevronUp className="h-5 w-5 text-gray-500" />
+                ) : (
+                  <ChevronDown className="h-5 w-5 text-gray-500" />
+                )}
+              </button>
+              {openFAQ === index && (
+                <div className="px-6 pb-4">
+                  <p className="text-gray-600 leading-relaxed">{faq.answer}</p>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
 
   const renderMainContent = () => (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-white">
       {renderHeader()}
-      {renderPricingSection()}
-      {renderCTASection()}
+      {renderPackagesSection()}
+      {renderFAQSection()}
     </div>
   );
 

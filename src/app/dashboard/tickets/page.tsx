@@ -51,11 +51,12 @@ interface TicketPackage {
   ticketPackageName: string;
   requestAmount: number;
   price: number;
-  status?: Status;
+  status: Status;
 }
 
 interface TicketPackageListItem extends TicketPackage {
-  ticketPackageId: string;
+  ticketPackageId?: string;
+  id?: string;
 }
 
 type ViewMode = "list" | "create" | "edit" | "view";
@@ -71,7 +72,7 @@ const initialPackageData: TicketPackage = {
 export default function TicketPackagesPage() {
   // --- STATE MANAGEMENT ---
   const [packages, setPackages] = useState<TicketPackageListItem[]>([]);
-  const [currentPackage, setCurrentPackage] = useState<TicketPackage>(initialPackageData);
+  const [packageData, setPackageData] = useState<TicketPackage>(initialPackageData);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [loading, setLoading] = useState(false);
@@ -81,6 +82,7 @@ export default function TicketPackagesPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<TicketPackageListItem | null>(null);
   const [usdToVndRate, setUsdToVndRate] = useState<number>(24000); // fallback default
+  const [displayPrice, setDisplayPrice] = useState<number>(0); // New state for display price
 
   // --- LOGIC METHODS ---
 
@@ -127,33 +129,37 @@ export default function TicketPackagesPage() {
 
     try {
       const data = await apiRequest(`/ticket-package/${id}`);
-      setCurrentPackage({
+
+      const packagePrice = data.price || 0;
+      setPackageData({
         ticketPackageName: data.ticketPackageName || "",
         requestAmount: data.requestAmount || 0,
-        price: data.price || 0,
+        price: packagePrice,
         status: data.status?.toUpperCase() === "ACTIVE" ? "ACTIVE" : "INACTIVE",
       });
+
+      // Set display price based on current currency
+      const priceToDisplay = currency === "USD" ? packagePrice / usdToVndRate : packagePrice;
+      setDisplayPrice(priceToDisplay);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch package");
       toast.error("Failed to fetch package");
     } finally {
       setLoading(false);
     }
-  }, [apiRequest]);
+  }, [apiRequest, currency, usdToVndRate]);
 
   // Create new package
   const createPackage = async () => {
     setLoading(true);
     try {
       // Convert price to VND for API
-      const priceInVND = currency === "USD" ? currentPackage.price * usdToVndRate : currentPackage.price;
-      
+      const priceInVND = currency === "USD" ? displayPrice * usdToVndRate : displayPrice;
+      const payload = { ...packageData, price: priceInVND };
+
       await apiRequest("/ticket-package", {
         method: "POST",
-        body: JSON.stringify({
-          ...currentPackage,
-          price: priceInVND,
-        }),
+        body: JSON.stringify(payload),
       });
       
       toast.success("Package created successfully");
@@ -175,14 +181,12 @@ export default function TicketPackagesPage() {
     setLoading(true);
     try {
       // Convert price to VND for API
-      const priceInVND = currency === "USD" ? currentPackage.price * usdToVndRate : currentPackage.price;
-      
+      const priceInVND = currency === "USD" ? displayPrice * usdToVndRate : displayPrice;
+      const payload = { ...packageData, price: priceInVND };
+
       await apiRequest(`/ticket-package/${editingId}`, {
         method: "PUT",
-        body: JSON.stringify({
-          ...currentPackage,
-          price: priceInVND,
-        }),
+        body: JSON.stringify(payload),
       });
       
       toast.success("Package updated successfully");
@@ -199,10 +203,11 @@ export default function TicketPackagesPage() {
 
   // Delete package
   const deletePackage = async (packageItem: TicketPackageListItem) => {
+    const id = getPackageId(packageItem);
     setLoading(true);
     
     try {
-      await apiRequest(`/ticket-package/${packageItem.ticketPackageId}`, { method: "DELETE" });
+      await apiRequest(`/ticket-package/${id}`, { method: "DELETE" });
       toast.success("Package deleted successfully");
       setDeleteDialogOpen(false);
       setDeleteTarget(null);
@@ -218,7 +223,7 @@ export default function TicketPackagesPage() {
 
   // Submit form (create or update)
   const submitPackageForm = async () => {
-    const { ticketPackageName, requestAmount, price } = currentPackage;
+    const { ticketPackageName, requestAmount } = packageData;
 
     if (!ticketPackageName.trim()) {
       setError("Package name is required");
@@ -232,7 +237,7 @@ export default function TicketPackagesPage() {
       return;
     }
 
-    if (price <= 0) {
+    if (displayPrice <= 0) {
       setError("Price must be greater than 0");
       toast.error("Price must be greater than 0");
       return;
@@ -249,21 +254,24 @@ export default function TicketPackagesPage() {
 
   // Reset form to initial state
   const resetForm = useCallback(() => {
-    setCurrentPackage(initialPackageData);
+    setPackageData(initialPackageData);
+    setDisplayPrice(0);
     setEditingId(null);
     setError(null);
   }, []);
 
+  // Get package ID from package object
+  const getPackageId = useCallback((packageItem: TicketPackageListItem): string => {
+    return packageItem.ticketPackageId || packageItem.id || "";
+  }, []);
+
   // Format price display
   const formatPrice = useCallback((price: number): string => {
-    const displayPrice = currency === "USD" ? price / usdToVndRate : price;
-    const currencySymbol = currency === "USD" ? "$" : "";
-    const currencyUnit = currency === "VND" ? " VND" : "";
-    
-    return `${currencySymbol}${displayPrice.toLocaleString("en-US", {
-      minimumFractionDigits: currency === "USD" ? 2 : 0,
-      maximumFractionDigits: currency === "USD" ? 2 : 0,
-    })}${currencyUnit}`;
+    if (currency === "USD") {
+      const priceInUSD = price / usdToVndRate;
+      return `$${priceInUSD.toFixed(2)}`;
+    }
+    return `${price.toLocaleString("en-US")} VND`;
   }, [currency, usdToVndRate]);
 
   // --- HANDLER METHODS ---
@@ -274,18 +282,32 @@ export default function TicketPackagesPage() {
     setViewMode("create");
   }, [resetForm]);
 
-  // Handle editing package
+  // Handle editing package - FIXED: Use existing data instead of fetching
   const handleEdit = useCallback(async (packageItem: TicketPackageListItem) => {
-    setEditingId(packageItem.ticketPackageId);
-    await fetchPackageById(packageItem.ticketPackageId);
+    const id = getPackageId(packageItem);
+    setEditingId(id);
+    
+    // Use existing package data instead of fetching again
+    setPackageData({
+      ticketPackageName: packageItem.ticketPackageName,
+      requestAmount: packageItem.requestAmount,
+      price: packageItem.price,
+      status: packageItem.status,
+    });
+    
+    // Set display price based on current currency
+    const priceToDisplay = currency === "USD" ? packageItem.price / usdToVndRate : packageItem.price;
+    setDisplayPrice(priceToDisplay);
+    
     setViewMode("edit");
-  }, [fetchPackageById]);
+  }, [getPackageId, currency, usdToVndRate]);
 
   // Handle viewing package
   const handleView = useCallback(async (packageItem: TicketPackageListItem) => {
-    await fetchPackageById(packageItem.ticketPackageId);
+    const id = getPackageId(packageItem);
+    await fetchPackageById(id);
     setViewMode("view");
-  }, [fetchPackageById]);
+  }, [getPackageId, fetchPackageById]);
 
   // Handle delete confirmation
   const handleDelete = (packageItem: TicketPackageListItem) => {
@@ -313,14 +335,22 @@ export default function TicketPackagesPage() {
 
   // Handle input field changes
   const handleInputChange = useCallback((field: keyof TicketPackage, value: string | number) => {
-    setCurrentPackage(prev => ({ ...prev, [field]: value }));
+    setPackageData(prev => ({ ...prev, [field]: value }));
   }, []);
 
-  // Handle price change with validation
+  // Handle price change with validation - FIXED: Use displayPrice
   const handlePriceChange = useCallback((value: string) => {
     const numericValue = parseFloat(value);
     if (!isNaN(numericValue) && numericValue >= 0) {
-      handleInputChange("price", numericValue);
+      setDisplayPrice(numericValue);
+    }
+  }, []);
+
+  // Handle request amount change with validation
+  const handleRequestAmountChange = useCallback((value: string) => {
+    const numericValue = parseInt(value);
+    if (!isNaN(numericValue) && numericValue >= 0) {
+      handleInputChange("requestAmount", numericValue);
     }
   }, [handleInputChange]);
 
@@ -328,6 +358,21 @@ export default function TicketPackagesPage() {
   const handleFilterChange = useCallback((mode: FilterMode) => {
     fetchPackages(mode);
   }, [fetchPackages]);
+
+  // Handle currency change - FIXED: Convert display price when currency changes
+  const handleCurrencyChange = useCallback((newCurrency: Currency) => {
+    if (newCurrency !== currency) {
+      // Convert current display price to new currency
+      if (newCurrency === "USD" && currency === "VND") {
+        // Converting from VND to USD
+        setDisplayPrice(prev => prev / usdToVndRate);
+      } else if (newCurrency === "VND" && currency === "USD") {
+        // Converting from USD to VND
+        setDisplayPrice(prev => prev * usdToVndRate);
+      }
+    }
+    setCurrency(newCurrency);
+  }, [currency, usdToVndRate]);
 
   // Effects
   useEffect(() => {
@@ -338,6 +383,7 @@ export default function TicketPackagesPage() {
     fetch("https://api.getgeoapi.com/v2/currency/convert?api_key=05585d2dbe81b54873e6a5ec72b0ad7e423bbcc0&from=USD&to=VND&amount=1&format=json")
       .then(res => res.json())
       .then(data => {
+        // Check if the response is successful and has the expected structure
         if (
           data &&
           data.status === "success" &&
@@ -369,7 +415,7 @@ export default function TicketPackagesPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Select value={currency} onValueChange={(value: Currency) => setCurrency(value)}>
+          <Select value={currency} onValueChange={handleCurrencyChange}>
             <SelectTrigger className="w-20">
               <SelectValue />
             </SelectTrigger>
@@ -420,9 +466,9 @@ export default function TicketPackagesPage() {
       {/* Packages Grid */}
       {!loading && packages.length > 0 && (
         <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-          {packages.map((packageItem) => (
+          {packages.map((packageItem, index) => (
             <Card
-              key={packageItem.ticketPackageId}
+              key={getPackageId(packageItem) || index}
               className="hover:shadow-md transition-shadow h-full flex flex-col overflow-hidden"
             >
               <CardHeader className="flex-1 min-h-0 pb-3">
@@ -567,7 +613,7 @@ export default function TicketPackagesPage() {
                 <Label htmlFor="packageName">Package Name *</Label>
                 <Input
                   id="packageName"
-                  value={currentPackage.ticketPackageName}
+                  value={packageData.ticketPackageName}
                   onChange={(e) => handleInputChange("ticketPackageName", e.target.value)}
                   placeholder="e.g., Starter, Professional, Enterprise"
                   required
@@ -576,7 +622,7 @@ export default function TicketPackagesPage() {
               <div className="space-y-2">
                 <Label htmlFor="status">Status</Label>
                 <Select
-                  value={currentPackage.status}
+                  value={packageData.status}
                   onValueChange={(value: Status) => handleInputChange("status", value)}
                 >
                   <SelectTrigger>
@@ -599,36 +645,40 @@ export default function TicketPackagesPage() {
                 <Input
                   id="requestAmount"
                   type="number"
-                  min="1"
-                  value={currentPackage.requestAmount}
-                  onChange={(e) => handleInputChange("requestAmount", parseInt(e.target.value) || 0)}
+                  value={packageData.requestAmount}
+                  onChange={(e) => handleRequestAmountChange(e.target.value)}
                   placeholder="Number of requests"
+                  min="1"
                   required
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="price">Price (VND) *</Label>
+                <Label htmlFor="price">Price ({currency}) *</Label>
                 <Input
                   id="price"
                   type="number"
-                  min="0.01"
-                  step={currency === "USD" ? "0.01" : "1"}
-                  value={currentPackage.price}
+                  value={displayPrice}
                   onChange={(e) => handlePriceChange(e.target.value)}
                   placeholder="Package price"
+                  min="0"
+                  step={currency === "USD" ? "0.01" : "1"}
                   required
                 />
               </div>
             </div>
 
-            {currentPackage.requestAmount > 0 && currentPackage.price > 0 && (
+            {/* Price Calculation Preview */}
+            {packageData.requestAmount > 0 && displayPrice > 0 && (
               <div className="p-4 bg-muted rounded-lg">
                 <div className="text-sm">
                   <span className="text-muted-foreground">
                     Price per request:{" "}
                   </span>
                   <span className="font-medium text-green-600">
-                    {formatPrice(currentPackage.price / currentPackage.requestAmount)}
+                    {currency === "USD" 
+                      ? `$${(displayPrice / packageData.requestAmount).toFixed(2)}`
+                      : `${Math.round(displayPrice / packageData.requestAmount).toLocaleString("en-US")} VND`
+                    }
                   </span>
                 </div>
               </div>
@@ -640,9 +690,9 @@ export default function TicketPackagesPage() {
                 type="submit"
                 disabled={
                   loading ||
-                  !currentPackage.ticketPackageName.trim() ||
-                  currentPackage.requestAmount <= 0 ||
-                  currentPackage.price <= 0
+                  !packageData.ticketPackageName.trim() ||
+                  packageData.requestAmount <= 0 ||
+                  displayPrice <= 0
                 }
               >
                 {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
@@ -682,16 +732,16 @@ export default function TicketPackagesPage() {
       <Card>
         <CardHeader>
           <div className="flex items-start justify-between gap-4">
-            <CardTitle>{currentPackage.ticketPackageName || "Unnamed Package"}</CardTitle>
-            {currentPackage.status && (
+            <CardTitle>{packageData.ticketPackageName || "Unnamed Package"}</CardTitle>
+            {packageData.status && (
               <Badge
                 variant={
-                  currentPackage.status.toUpperCase() === "ACTIVE"
+                  packageData.status.toUpperCase() === "ACTIVE"
                     ? "default"
                     : "secondary"
                 }
               >
-                {currentPackage.status.toUpperCase()}
+                {packageData.status.toUpperCase()}
               </Badge>
             )}
           </div>
@@ -703,7 +753,7 @@ export default function TicketPackagesPage() {
                 Request Amount
               </Label>
               <p className="text-2xl font-bold">
-                {currentPackage.requestAmount.toLocaleString()}
+                {packageData.requestAmount.toLocaleString()}
               </p>
             </div>
             <div className="space-y-1">
@@ -711,7 +761,7 @@ export default function TicketPackagesPage() {
                 Total Price
               </Label>
               <p className="text-2xl font-bold text-green-600">
-                {formatPrice(currentPackage.price)}
+                {formatPrice(packageData.price)}
               </p>
             </div>
           </div>
@@ -722,8 +772,8 @@ export default function TicketPackagesPage() {
                 Price per Request
               </Label>
               <p className="text-xl font-semibold text-green-600">
-                {currentPackage.requestAmount > 0
-                  ? formatPrice(currentPackage.price / currentPackage.requestAmount)
+                {packageData.requestAmount > 0
+                  ? formatPrice(packageData.price / packageData.requestAmount)
                   : formatPrice(0)}
               </p>
             </div>
@@ -735,18 +785,18 @@ export default function TicketPackagesPage() {
       <div className="flex gap-4">
         <Button
           onClick={() => {
-            const packageItem = packages.find(p => p.ticketPackageId === editingId) || {
-              ticketPackageId: editingId || "",
-              ticketPackageName: currentPackage.ticketPackageName,
-              requestAmount: currentPackage.requestAmount,
-              price: currentPackage.price,
-              status: currentPackage.status,
+            const packageItem = packages.find(p => getPackageId(p) === editingId) || {
+              ticketPackageId: editingId,
+              ticketPackageName: packageData.ticketPackageName,
+              requestAmount: packageData.requestAmount,
+              price: packageData.price,
+              status: packageData.status,
             } as TicketPackageListItem;
             handleEdit(packageItem);
           }}
         >
           <Edit className="w-4 h-4 mr-2" />
-          Edit Packag
+          Edit Package
         </Button>
         <Button variant="outline" onClick={handleBackToList}>
           Close

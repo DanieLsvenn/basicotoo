@@ -347,11 +347,10 @@ function FormTemplateCard({
           </Button>
           <Button
             size="sm"
-            className={`flex-1 ${
-              canAfford
+            className={`flex-1 ${canAfford
                 ? "bg-blue-600 hover:bg-blue-700"
                 : "bg-gray-400 cursor-not-allowed"
-            }`}
+              }`}
             onClick={handlePurchase}
             disabled={!canAfford || isPurchasing}
           >
@@ -439,7 +438,7 @@ export const purchaseFormTemplate = async (
     );
 
     const response = await fetch(
-      "https://localhost:7024/api/orders/create-form",
+      "https://localhost:7024/api/order/create-form",
       {
         method: "POST",
         headers: {
@@ -577,18 +576,15 @@ export default function UserServiceDetailPage() {
   const serviceSlug = params.service as string;
 
   const [service, setService] = useState<Service | null>(null);
-  const [formTemplate, setFormTemplate] = useState<
-    (FormTemplate & { price: number }) | null
-  >(null);
+  const [formTemplate, setFormTemplate] = useState<(FormTemplate & { price: number }) | null>(null);
   const [lawyers, setLawyers] = useState<Lawyer[]>([]);
   const [loading, setLoading] = useState(true);
   const [lawyersLoading, setLawyersLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [contentType, setContentType] = useState<"service" | "template">(
-    "service"
-  );
+  const [contentType, setContentType] = useState<"service" | "template">("service");
   const [userTickets, setUserTickets] = useState(0);
   const [userAccountId, setUserAccountId] = useState<string>("");
+  const [isPurchasingTemplate, setIsPurchasingTemplate] = useState(false);
 
   const fetchUserProfile = useCallback(async () => {
     const profileData = await getUserProfile();
@@ -646,16 +642,21 @@ export default function UserServiceDetailPage() {
       numericPrice,
     });
 
-    const success = await purchaseFormTemplate(
-      userAccountId,
-      formTemplateId,
-      numericPrice // Pass the validated numeric price
-    );
+    setIsPurchasingTemplate(true); // Add this line
+    try {
+      const success = await purchaseFormTemplate(
+        userAccountId,
+        formTemplateId,
+        numericPrice
+      );
 
-    if (success) {
-      // Refresh user tickets
-      console.log("Purchase successful, refreshing profile...");
-      await fetchUserProfile();
+      if (success) {
+        // Refresh user tickets
+        console.log("Purchase successful, refreshing profile...");
+        await fetchUserProfile();
+      }
+    } finally {
+      setIsPurchasingTemplate(false); // Add this line
     }
   };
 
@@ -866,10 +867,10 @@ export default function UserServiceDetailPage() {
                     src={getPlaceholderImage(formTemplate.formTemplateName)}
                     alt={formTemplate.formTemplateName}
                     className="h-full w-full object-cover"
-                    // onError={(e) => {
-                    //   (e.target as HTMLImageElement).src =
-                    //     "/assets/DefaultDocument.png";
-                    // }}
+                  // onError={(e) => {
+                  //   (e.target as HTMLImageElement).src =
+                  //     "/assets/DefaultDocument.png";
+                  // }}
                   />
                 </div>
               </div>
@@ -927,8 +928,7 @@ export default function UserServiceDetailPage() {
                     size="lg"
                     onClick={() => {
                       window.open(
-                        `/templates/preview/${
-                          formTemplate.formTemplateId || formTemplate.id
+                        `/templates/preview/${formTemplate.formTemplateId || formTemplate.id
                         }`,
                         "_blank"
                       );
@@ -939,21 +939,27 @@ export default function UserServiceDetailPage() {
                   </Button>
                   <Button
                     size="lg"
-                    className={`${
-                      userTickets >= formTemplate.price
+                    className={`${userTickets >= formTemplate.price
                         ? "bg-blue-600 hover:bg-blue-700"
                         : "bg-gray-400 cursor-not-allowed"
-                    }`}
+                      }`}
                     onClick={() =>
                       handleFormPurchase(
                         formTemplate.formTemplateId || formTemplate.id || "",
                         formTemplate.price
                       )
                     }
-                    disabled={userTickets < formTemplate.price}
+                    disabled={userTickets < formTemplate.price || isPurchasingTemplate}
                   >
-                    <Download className="h-5 w-5 mr-2" />
-                    Buy Template ({formTemplate.price} tickets)
+                    {isPurchasingTemplate ? (
+                      <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                    ) : (
+                      <Download className="h-5 w-5 mr-2" />
+                    )}
+                    {isPurchasingTemplate
+                      ? "Purchasing..."
+                      : `Buy Template (${formTemplate.price} tickets)`
+                    }
                   </Button>
                 </div>
               </div>

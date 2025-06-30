@@ -36,6 +36,7 @@ import {
   Edit,
   Trash2,
   FileText,
+  Ticket,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -51,11 +52,9 @@ const DynamicEditor = dynamic(() => import("@/components/DynamicEditor"), {
 const API_BASE_URL = "https://localhost:7276/api";
 const API_SERVICE = "https://localhost:7218/api/Service";
 const STATUS_OPTIONS = ["ACTIVE", "INACTIVE"] as const;
-const CURRENCY_OPTIONS = ["VND", "USD"] as const;
 
 // Types
 type Status = (typeof STATUS_OPTIONS)[number];
-type Currency = (typeof CURRENCY_OPTIONS)[number];
 
 interface ServiceOption {
   serviceId: string;
@@ -97,10 +96,8 @@ export default function FormTemplatesPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filterMode, setFilterMode] = useState<FilterMode>("all");
-  const [currency, setCurrency] = useState<Currency>("VND");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<TemplateListItem | null>(null);
-  const [usdToVndRate, setUsdToVndRate] = useState<number>(24000); // fallback default
 
   // --- LOGIC METHODS ---
 
@@ -193,13 +190,9 @@ export default function FormTemplatesPage() {
   const createTemplate = async () => {
     setLoading(true);
     try {
-      // Convert price to VND for API
-      const priceInVND = currency === "USD" ? formData.price * usdToVndRate : formData.price;
-      const payload = { ...formData, price: priceInVND };
-
       await apiRequest("/template", {
         method: "POST",
-        body: JSON.stringify(payload),
+        body: JSON.stringify(formData),
       });
 
       toast.success("Template created successfully");
@@ -221,13 +214,9 @@ export default function FormTemplatesPage() {
 
     setLoading(true);
     try {
-      // Convert price to VND for API
-      const priceInVND = currency === "USD" ? formData.price * usdToVndRate : formData.price;
-      const payload = { ...formData, price: priceInVND };
-
       await apiRequest(`/template/${editingId}`, {
         method: "PUT",
-        body: JSON.stringify(payload),
+        body: JSON.stringify(formData),
       });
 
       toast.success("Template updated successfully");
@@ -296,14 +285,10 @@ export default function FormTemplatesPage() {
     return template.formTemplateId || template.id || template.serviceId;
   }, []);
 
-  // Format price display
+  // Format price display in tickets
   const formatPrice = useCallback((price: number): string => {
-    if (currency === "USD") {
-      const priceInUSD = price / usdToVndRate;
-      return `$${priceInUSD.toFixed(2)}`;
-    }
-    return `${price.toLocaleString("en-US")} VND`;
-  }, [currency, usdToVndRate]);
+    return `${price.toLocaleString("en-US")} Tickets`;
+  }, []);
 
   // Get service name by ID
   const getServiceName = useCallback(
@@ -402,26 +387,6 @@ export default function FormTemplatesPage() {
     fetchServices();
   }, [fetchTemplates, fetchServices]);
 
-  useEffect(() => {
-    fetch("https://api.getgeoapi.com/v2/currency/convert?api_key=05585d2dbe81b54873e6a5ec72b0ad7e423bbcc0&from=USD&to=VND&amount=1&format=json")
-      .then(res => res.json())
-      .then(data => {
-        // Check if the response is successful and has the expected structure
-        if (
-          data &&
-          data.status === "success" &&
-          data.rates &&
-          data.rates.VND &&
-          data.rates.VND.rate
-        ) {
-          setUsdToVndRate(Number(data.rates.VND.rate));
-        }
-      })
-      .catch(() => {
-        setUsdToVndRate(26086.9826); // fallback
-      });
-  }, []);
-
   // --- RENDER METHODS ---
 
   const renderTemplateList = () => (
@@ -438,21 +403,6 @@ export default function FormTemplatesPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Select
-            value={currency}
-            onValueChange={(value: Currency) => setCurrency(value)}
-          >
-            <SelectTrigger className="w-20">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {CURRENCY_OPTIONS.map((curr) => (
-                <SelectItem key={curr} value={curr}>
-                  {curr}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
           <Button
             onClick={() => handleFilterChange("active")}
             variant={filterMode === "active" ? "default" : "outline"}
@@ -532,9 +482,12 @@ export default function FormTemplatesPage() {
                     </span>
                   </CardDescription>
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs sm:text-sm font-medium text-green-600 break-words">
-                      {formatPrice(template.price || 0)}
-                    </span>
+                    <div className="flex items-center gap-1 text-xs sm:text-sm font-medium text-amber-600">
+                      <Ticket className="w-3 h-3 sm:w-4 sm:h-4" />
+                      <span className="break-words">
+                        {formatPrice(template.price || 0)}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </CardHeader>
@@ -693,7 +646,10 @@ export default function FormTemplatesPage() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="price">Price (VND) *</Label>
+                <Label htmlFor="price" className="flex items-center gap-2">
+                  <Ticket className="w-4 h-4 text-amber-600" />
+                  Price (Tickets) *
+                </Label>
                 <Input
                   id="price"
                   type="number"
@@ -701,7 +657,7 @@ export default function FormTemplatesPage() {
                   onChange={(e) => handlePriceChange(e.target.value)}
                   placeholder="0"
                   min="0"
-                  step={currency === "USD" ? "0.01" : "1"}
+                  step="1"
                   required
                 />
               </div>
@@ -798,9 +754,12 @@ export default function FormTemplatesPage() {
               <Label className="text-sm font-medium text-muted-foreground">
                 Price
               </Label>
-              <p className="text-2xl font-bold text-green-600">
-                {formatPrice(formData.price)}
-              </p>
+              <div className="flex items-center gap-2">
+                <Ticket className="w-5 h-5 text-amber-600" />
+                <p className="text-2xl font-bold text-amber-600">
+                  {formatPrice(formData.price)}
+                </p>
+              </div>
             </div>
           </div>
 

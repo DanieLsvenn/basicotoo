@@ -973,9 +973,9 @@ export default function CheckoutPage() {
                         <div className="flex justify-between">
                           <span>Price per package</span>
                           <div className="text-right">
-                            <div>{formatUSDPrice(ticketPackage.price, usdToVndRate)}</div>
+                            <div>{formatPrice(ticketPackage.price)}</div>
                             <div className="text-sm text-muted-foreground">
-                              {formatPrice(ticketPackage.price)}
+                              {formatUSDPrice(ticketPackage.price, usdToVndRate)}
                             </div>
                           </div>
                         </div>
@@ -995,11 +995,11 @@ export default function CheckoutPage() {
                           <div className="flex justify-between text-lg font-semibold">
                             <span>Total</span>
                             <div className="text-right">
-                              <div>{formatUSDPrice(totalPrice, usdToVndRate)}</div>
-                              <div className="text-sm font-normal text-muted-foreground">
-                                {formatPrice(totalPrice)}
-                              </div>
-                            </div>
+                          <div>{formatPrice(totalPrice)}</div>
+                          <div className="text-sm font-normal text-muted-foreground">
+                            {formatUSDPrice(totalPrice, usdToVndRate)}
+                          </div>
+                        </div>
                           </div>
                         </div>
                       </>

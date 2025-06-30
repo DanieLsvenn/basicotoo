@@ -7,11 +7,11 @@ import {
   ArrowLeft,
   AlertTriangle,
   Star,
-  DollarSign,
   User,
   FileText,
   Download,
   Eye,
+  Phone,
 } from "lucide-react";
 import { MaxWidthWrapper } from "@/components/max-width-wrapper";
 import { Button } from "@/components/ui/button";
@@ -155,7 +155,7 @@ function LawyerCard({ lawyer, serviceId, serviceName }: LawyerCardProps) {
               </div>
 
               <div className="flex items-center text-sm text-gray-600">
-                <span className="mr-2">📞</span>
+                <Phone className="h-4 w-4 mr-2" />
                 <span>{lawyer.phone}</span>
               </div>
             </div>
@@ -163,7 +163,6 @@ function LawyerCard({ lawyer, serviceId, serviceName }: LawyerCardProps) {
             {/* Price and Rating */}
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2">
-                <DollarSign className="h-4 w-4 text-green-600" />
                 <span className="text-lg font-semibold text-green-600">
                   {formatPrice(lawyer.pricePerHour)}/hour
                 </span>
@@ -177,7 +176,7 @@ function LawyerCard({ lawyer, serviceId, serviceName }: LawyerCardProps) {
 
             {/* Book Button */}
             <div className="mt-4">
-              <Link href={`/booking/${serviceId}/${lawyer.lawyerId}`}>
+              <Link href={`/checkout/booking/${serviceId}/${lawyer.lawyerId}`}>
                 <Button className="w-full bg-blue-600 hover:bg-blue-700 transition-colors">
                   Book Consultation
                 </Button>

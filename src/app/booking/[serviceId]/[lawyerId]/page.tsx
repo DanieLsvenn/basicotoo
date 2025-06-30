@@ -8,17 +8,28 @@ import {
   AlertTriangle,
   Calendar as CalendarIcon,
   Clock,
-  DollarSign,
   User,
-  CheckCircle,
   XCircle,
-  CreditCard
+  CreditCard,
+  Trash2,
+  Landmark
 } from "lucide-react";
 import { MaxWidthWrapper } from "@/components/max-width-wrapper";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Calendar } from "@/components/ui/calendar";
+import { 
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import Cookies from "js-cookie";
 
@@ -119,6 +130,7 @@ export default function BookingPage() {
   const [error, setError] = useState<string | null>(null);
   const [pendingBookings, setPendingBookings] = useState<PendingBooking[]>([]);
   const [orderProcessing, setOrderProcessing] = useState(false);
+  const [cancellingBookings, setCancellingBookings] = useState<Set<string>>(new Set());
 
   // Fetch user profile
   const fetchProfile = useCallback(async () => {
@@ -174,6 +186,44 @@ export default function BookingPage() {
       console.error("Failed to fetch pending bookings:", error);
     }
   }, [profile?.accountId, serviceId, lawyerId]);
+
+  // Cancel booking function
+  const handleCancelBooking = async (bookingId: string) => {
+    setCancellingBookings(prev => new Set([...prev, bookingId]));
+    
+    try {
+      const token = Cookies.get("authToken");
+      if (!token) {
+        toast.error("Authentication required");
+        return;
+      }
+
+      const response = await fetch(`https://localhost:7286/api/Booking/${bookingId}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        toast.success("Booking cancelled successfully");
+        // Refresh pending bookings
+        await fetchPendingBookings();
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to cancel booking");
+      }
+    } catch (error) {
+      console.error("Failed to cancel booking:", error);
+      toast.error("Failed to cancel booking. Please try again.");
+    } finally {
+      setCancellingBookings(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(bookingId);
+        return newSet;
+      });
+    }
+  };
 
   // Fetch service details
   const fetchService = useCallback(async () => {
@@ -444,42 +494,114 @@ export default function BookingPage() {
           </div>
         </div>
 
-        {/* Pending Booking Alert */}
-        {currentPendingBooking && (
+        {/* Pending Bookings Alert */}
+        {pendingBookings.length > 0 && (
           <Card className="border-orange-200 bg-orange-50">
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <AlertTriangle className="h-5 w-5 text-orange-600" />
-                  <div>
-                    <p className="font-medium text-orange-800">
-                      You have a pending booking for this service
-                    </p>
-                    <p className="text-sm text-orange-600">
-                      Booking Date: {currentPendingBooking.bookingDate} |
-                      Amount: {formatPrice(currentPendingBooking.price)}
-                    </p>
+            <CardHeader>
+              <CardTitle className="flex items-center space-x-2 text-orange-800">
+                <AlertTriangle className="h-5 w-5" />
+                <span>Pending Bookings ({pendingBookings.length})</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {pendingBookings.map((booking) => (
+                <div 
+                  key={booking.bookingId} 
+                  className="flex items-center justify-between p-4 bg-white rounded-lg border border-orange-200"
+                >
+                  <div className="flex-1">
+                    <div className="flex items-center space-x-4">
+                      <div className="flex-1">
+                        <h4 className="font-medium text-orange-900">{booking.serviceName}</h4>
+                        <p className="text-sm text-orange-700">Lawyer: {booking.lawyerName}</p>
+                        <div className="flex items-center space-x-4 mt-2 text-sm text-orange-600">
+                          <span className="flex items-center space-x-1">
+                            <CalendarIcon className="h-4 w-4" />
+                            <span>{booking.bookingDate}</span>
+                          </span>
+                          <span className="flex items-center space-x-1">
+                            <Clock className="h-4 w-4" />
+                            <span>{formatTime(booking.startTime)} - {formatTime(booking.endTime)}</span>
+                          </span>
+                          <span className="flex items-center space-x-1">
+                            <Landmark className="h-4 w-4" />
+                            <span>{formatPrice(booking.price)}</span>
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Button
+                      onClick={() => handleOrder(booking.bookingId, booking.price)}
+                      disabled={orderProcessing}
+                      variant="outline"
+                      size="sm"
+                      className="border-orange-300 text-orange-700 hover:bg-orange-100"
+                    >
+                      {orderProcessing ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Processing...
+                        </>
+                      ) : (
+                        <>
+                          <CreditCard className="mr-2 h-4 w-4" />
+                          Pay Now
+                        </>
+                      )}
+                    </Button>
+                    
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="border-red-300 text-red-700 hover:bg-red-50"
+                          disabled={cancellingBookings.has(booking.bookingId)}
+                        >
+                          {cancellingBookings.has(booking.bookingId) ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Cancelling...
+                            </>
+                          ) : (
+                            <>
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Cancel
+                            </>
+                          )}
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Are you sure you want to cancel this booking?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            This action cannot be undone. This will cancel your booking for:
+                            <br />
+                            <strong>{booking.serviceName}</strong> with <strong>{booking.lawyerName}</strong>
+                            <br />
+                            Date: <strong>{booking.bookingDate}</strong>
+                            <br />
+                            Time: <strong>{formatTime(booking.startTime)} - {formatTime(booking.endTime)}</strong>
+                            <br />
+                            Amount: <strong>{formatPrice(booking.price)}</strong>
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Keep Booking</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={() => handleCancelBooking(booking.bookingId)}
+                            className="bg-red-600 hover:bg-red-700"
+                          >
+                            Yes, Cancel Booking
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
                   </div>
                 </div>
-                <Button
-                  onClick={() => handleOrder(currentPendingBooking.bookingId, currentPendingBooking.price)}
-                  disabled={orderProcessing}
-                  variant="outline"
-                  className="border-orange-300 text-orange-700 hover:bg-orange-100"
-                >
-                  {orderProcessing ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Processing...
-                    </>
-                  ) : (
-                    <>
-                      <CreditCard className="mr-2 h-4 w-4" />
-                      Return to Payment
-                    </>
-                  )}
-                </Button>
-              </div>
+              ))}
             </CardContent>
           </Card>
         )}
@@ -508,7 +630,6 @@ export default function BookingPage() {
                     <p className="text-muted-foreground">{lawyer?.email}</p>
                     <p className="text-muted-foreground">{lawyer?.phone}</p>
                     <div className="flex items-center space-x-2 mt-2">
-                      <DollarSign className="h-4 w-4" />
                       <span className="font-medium">
                         {lawyer ? formatPrice(lawyer.pricePerHour) : ""}/hour
                       </span>

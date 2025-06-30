@@ -3,9 +3,9 @@ import { getToken } from "next-auth/jwt";
 
 // Define user roles
 enum UserRole {
-  USER = "user",
-  LAWYER = "lawyer",
-  STAFF = "staff",
+  USER = "USER",
+  LAWYER = "LAWYER",
+  STAFF = "STAFF",
 }
 
 export async function middleware(request: NextRequest) {

@@ -25,9 +25,14 @@ import {
   Activity,
   Settings,
   Camera,
+  MessageSquare,
+  Clock,
+  CheckCircle,
+  RefreshCw,
 } from "lucide-react";
 import Cookies from "js-cookie";
 import { PurchasedFormsTab } from "@/components/PurchasedFormsTab";
+import { SendTicketForm } from "@/components/SendTicketForm";
 
 interface UserProfile {
   accountId: string;
@@ -36,7 +41,7 @@ interface UserProfile {
   username: string;
   gender: number;
   accountTicketRequest: number;
-  image?: string; // Add this line
+  image?: string;
   createdAt?: string;
   lastLogin?: string;
 }
@@ -48,6 +53,16 @@ interface ProfileStats {
   memberSince: string;
 }
 
+interface Ticket {
+  ticketId: string;
+  userId: string;
+  staffId: string | null;
+  serviceId: string;
+  content_Send: string;
+  content_Response: string | null;
+  status: "InProgress" | "ANSWERED";
+}
+
 export default function ProfilePage() {
   const { user, logout } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -56,6 +71,8 @@ export default function ProfilePage() {
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setSaving] = useState(false);
+  const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [isLoadingTickets, setIsLoadingTickets] = useState(false);
   const [editForm, setEditForm] = useState({
     fullName: "",
     gender: 0,
@@ -99,6 +116,37 @@ export default function ProfilePage() {
 
   const refreshProfile = async () => {
     await fetchProfile();
+  };
+
+  const fetchTickets = async () => {
+    if (!profile?.accountId) return;
+
+    setIsLoadingTickets(true);
+    try {
+      const token = Cookies.get("authToken");
+      const response = await fetch(
+        `https://localhost:7103/api/Ticket/by-customer?userid=${profile.accountId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        setTickets(data);
+      } else {
+        throw new Error("Failed to fetch tickets");
+      }
+    } catch (error) {
+      console.error("Failed to fetch tickets:", error);
+      toast.error("Failed to load tickets", {
+        description: "Please try again later.",
+      });
+    } finally {
+      setIsLoadingTickets(false);
+    }
   };
 
   const fetchStats = async () => {
@@ -256,6 +304,41 @@ export default function ProfilePage() {
     }
   };
 
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case "ANSWERED":
+        return <CheckCircle className="h-4 w-4 text-green-600" />;
+      case "InProgress":
+        return <Clock className="h-4 w-4 text-orange-600" />;
+      default:
+        return <MessageSquare className="h-4 w-4 text-gray-600" />;
+    }
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case "ANSWERED":
+        return (
+          <Badge variant="default" className="bg-green-100 text-green-800">
+            Answered
+          </Badge>
+        );
+      case "InProgress":
+        return (
+          <Badge variant="default" className="bg-orange-100 text-orange-800">
+            In Progress
+          </Badge>
+        );
+      default:
+        return <Badge variant="secondary">{status}</Badge>;
+    }
+  };
+
+  const handleTicketSent = () => {
+    // Refresh tickets when a new ticket is sent
+    fetchTickets();
+  };
+
   if (isLoading) {
     return (
       <div className="container mx-auto py-8">
@@ -301,7 +384,7 @@ export default function ProfilePage() {
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="personal">Personal Info</TabsTrigger>
             <TabsTrigger value="forms">My Forms</TabsTrigger>
-            <TabsTrigger value="activity">Activity</TabsTrigger>
+            <TabsTrigger value="tickets">Support</TabsTrigger>
             <TabsTrigger value="settings">Settings</TabsTrigger>
           </TabsList>
 
@@ -641,6 +724,94 @@ export default function ProfilePage() {
 
           <TabsContent value="forms" className="space-y-6">
             <PurchasedFormsTab customerId={profile.accountId} />
+          </TabsContent>
+
+          <TabsContent value="tickets" className="space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Send New Ticket */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Send Support Request</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <SendTicketForm onTicketSent={handleTicketSent} />
+                </CardContent>
+              </Card>
+
+              {/* Ticket History */}
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <CardTitle>My Tickets</CardTitle>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={fetchTickets}
+                    disabled={isLoadingTickets}
+                  >
+                    {isLoadingTickets ? (
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2"></div>
+                    ) : (
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                    )}
+                    Refresh
+                  </Button>
+                </CardHeader>
+                <CardContent>
+                  {isLoadingTickets ? (
+                    <div className="flex items-center justify-center py-8">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                    </div>
+                  ) : tickets.length === 0 ? (
+                    <div className="text-center py-8">
+                      <MessageSquare className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                      <p className="text-muted-foreground">No tickets found</p>
+                      <p className="text-sm text-muted-foreground">
+                        Your support requests will appear here
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4 max-h-96 overflow-y-auto">
+                      {tickets.map((ticket) => (
+                        <div
+                          key={ticket.ticketId}
+                          className="border rounded-lg p-4 space-y-3"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-2">
+                              {getStatusIcon(ticket.status)}
+                              <span className="text-sm font-medium">
+                                Ticket #{ticket.ticketId.slice(0, 8)}
+                              </span>
+                            </div>
+                            {getStatusBadge(ticket.status)}
+                          </div>
+
+                          <div className="space-y-2">
+                            <div>
+                              <p className="text-sm font-medium text-muted-foreground">
+                                Your Message:
+                              </p>
+                              <p className="text-sm">{ticket.content_Send}</p>
+                            </div>
+
+                            {ticket.content_Response && (
+                              <div className="bg-muted/50 rounded-md p-3">
+                                <p className="text-sm font-medium text-muted-foreground mb-1">
+                                  Staff Response:
+                                </p>
+                                <p className="text-sm">
+                                  {ticket.content_Response}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
         </Tabs>
       </div>

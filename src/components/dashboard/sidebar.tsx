@@ -43,6 +43,11 @@ const navItems = [
     href: "/dashboard/tickets",
     icon: Package,
   },
+  {
+    title: "View Requests",
+    href: "/dashboard/staff-dashboard",
+    icon: Settings,
+  },
 ];
 
 export function Sidebar() {

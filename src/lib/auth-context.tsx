@@ -5,26 +5,56 @@ import { useRouter } from "next/navigation";
 import { useSession, signIn, signOut } from "next-auth/react";
 import Cookies from "js-cookie";
 
-interface User {
+// Define user roles
+export enum UserRole {
+  USER = "user",
+  LAWYER = "lawyer",
+  STAFF = "staff",
+}
+
+interface BaseUser {
   id: string;
   email: string;
   name: string;
   username: string;
-  accountId?: string;
-  fullName?: string;
+  role: UserRole;
+  image?: string;
   gender?: number;
-  accountTicketRequest?: number;
-  image?: string; // Add this line
 }
+
+interface RegularUser extends BaseUser {
+  role: UserRole.USER;
+  accountTicketRequest?: number;
+  fullName?: string;
+}
+
+interface LawyerUser extends BaseUser {
+  role: UserRole.LAWYER;
+  aboutLawyer?: string;
+  phone?: string;
+  dob?: string;
+  services?: Array<{
+    serviceId: string;
+    pricePerHour: number;
+  }>;
+}
+
+interface StaffUser extends BaseUser {
+  role: UserRole.STAFF;
+  fullName?: string;
+}
+
+type User = RegularUser | LawyerUser | StaffUser;
 
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (username: string, password: string, role?: UserRole) => Promise<void>;
   loginWithGoogle: () => Promise<void>;
   register: (data: RegisterData) => Promise<void>;
+  registerLawyer: (data: LawyerRegisterData) => Promise<void>;
+  registerStaff: (data: StaffRegisterData) => Promise<void>;
   logout: () => void;
-  // Updated forgot password methods
   requestPasswordReset: (email: string) => Promise<void>;
   verifyResetOtp: (email: string, otp: string) => Promise<void>;
   resetPassword: (email: string, newPassword: string) => Promise<void>;
@@ -41,6 +71,31 @@ interface RegisterData {
   gender: number;
 }
 
+interface LawyerRegisterData {
+  username: string;
+  password: string;
+  email: string;
+  fullName: string;
+  dob: string;
+  gender: number;
+  phone: string;
+  image?: string;
+  aboutLawyer: string;
+  services: Array<{
+    serviceId: string;
+    pricePerHour: number;
+  }>;
+}
+
+interface StaffRegisterData {
+  username: string;
+  fullName: string;
+  email: string;
+  gender: number;
+  password: string;
+  imageUrl?: string;
+}
+
 interface UpdateProfileData {
   fullName: string;
   gender: number;
@@ -50,26 +105,26 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const API_BASE_AUTH = "https://localhost:7218/api/Account";
+  const API_BASE_LAWYER = "https://localhost:7218/api/Lawyer";
+  const API_BASE_STAFF = "https://localhost:7218/api/Staff";
   const API_BASE_FORGOT_PASSWORD = "https://localhost:7218/api/ForgotPassword";
-  const API_BASE_URL = "https://localhost:7218/api/Account";
+
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
   const { data: session, status } = useSession();
 
   useEffect(() => {
-    // Check if user is logged in on mount
     checkAuth();
   }, [session, status]);
 
   const checkAuth = async () => {
-    // Handle NextAuth session
     if (status === "loading") {
       return;
     }
 
     if (session?.backendToken) {
-      // User is logged in via Google OAuth
+      // Handle Google OAuth session (assuming it's always for regular users)
       try {
         const response = await fetch(`${API_BASE_AUTH}/profile`, {
           method: "GET",
@@ -80,18 +135,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (response.ok) {
           const userData = await response.json();
-          const mappedUser: User = {
-            id: userData.id,
+          const mappedUser: RegularUser = {
+            id: userData.accountId || userData.id,
             email: userData.email,
             name: userData.fullName,
             username: userData.username,
+            role: UserRole.USER,
             fullName: userData.fullName,
             gender: userData.gender,
             accountTicketRequest: userData.accountTicketRequest,
-            image: userData.image || "", // Ensure image is included
+            image: userData.image || "",
           };
           setUser(mappedUser);
           Cookies.set("authToken", session.backendToken, { expires: 7 });
+          Cookies.set("userRole", UserRole.USER, { expires: 7 });
         }
       } catch (err) {
         console.error("Failed to fetch user profile from Google session", err);
@@ -99,37 +156,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } else {
       // Check for regular authentication token
       const token = Cookies.get("authToken");
-      if (!token) {
+      const userRole = Cookies.get("userRole") as UserRole;
+
+      if (!token || !userRole) {
         setIsLoading(false);
         return;
       }
 
       try {
-        const response = await fetch(`${API_BASE_AUTH}/profile`, {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        if (!response.ok) {
-          throw new Error("Unauthorized");
-        }
-
-        const userData = await response.json();
-
-        const mappedUser: User = {
-          id: userData.id,
-          email: userData.email,
-          name: userData.fullName,
-          username: userData.username,
-          fullName: userData.fullName,
-          gender: userData.gender,
-          accountTicketRequest: userData.accountTicketRequest,
-          image: userData.image || "", // Ensure image is included
-        };
-
-        setUser(mappedUser);
+        await fetchUserProfile(token, userRole);
       } catch (err) {
         console.error("Failed to fetch user profile", err);
         logout();
@@ -139,16 +174,106 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(false);
   };
 
+  const fetchUserProfile = async (token: string, role: UserRole) => {
+    let apiUrl = "";
+
+    switch (role) {
+      case UserRole.USER:
+        apiUrl = `${API_BASE_AUTH}/profile`;
+        break;
+      case UserRole.LAWYER:
+        apiUrl = `${API_BASE_LAWYER}/profile`; // Assuming this endpoint exists
+        break;
+      case UserRole.STAFF:
+        apiUrl = `${API_BASE_STAFF}/profile`; // Assuming this endpoint exists
+        break;
+      default:
+        throw new Error("Invalid user role");
+    }
+
+    const response = await fetch(apiUrl, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error("Unauthorized");
+    }
+
+    const userData = await response.json();
+    let mappedUser: User;
+
+    switch (role) {
+      case UserRole.USER:
+        mappedUser = {
+          id: userData.accountId || userData.id,
+          email: userData.email,
+          name: userData.fullName,
+          username: userData.username,
+          role: UserRole.USER,
+          fullName: userData.fullName,
+          gender: userData.gender,
+          accountTicketRequest: userData.accountTicketRequest,
+          image: userData.image || "",
+        } as RegularUser;
+        break;
+
+      case UserRole.LAWYER:
+        mappedUser = {
+          id: userData.id,
+          email: userData.email,
+          name: userData.fullName,
+          username: userData.username,
+          role: UserRole.LAWYER,
+          aboutLawyer: userData.aboutLawyer,
+          phone: userData.phone,
+          dob: userData.dob,
+          gender: userData.gender,
+          services: userData.services,
+          image: userData.image || "",
+        } as LawyerUser;
+        break;
+
+      case UserRole.STAFF:
+        mappedUser = {
+          id: userData.id,
+          email: userData.email,
+          name: userData.fullName,
+          username: userData.username,
+          role: UserRole.STAFF,
+          fullName: userData.fullName,
+          gender: userData.gender,
+          image: userData.imageUrl || "",
+        } as StaffUser;
+        break;
+
+      default:
+        throw new Error("Invalid user role");
+    }
+
+    setUser(mappedUser);
+  };
+
   const refreshUser = checkAuth;
 
-  const login = async (username: string, password: string) => {
+  const login = async (
+    username: string,
+    password: string,
+    role: UserRole = UserRole.USER
+  ) => {
+    // Use the same login endpoint for all roles
+    const apiUrl = `${API_BASE_AUTH}/login`;
+    const requestBody = { username, password };
+
     try {
-      const response = await fetch(`${API_BASE_AUTH}/login`, {
+      const response = await fetch(apiUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify(requestBody),
       });
 
       if (!response.ok) {
@@ -159,10 +284,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const result = await response.json();
       const token = result.token;
 
-      Cookies.set("authToken", token, { expires: 7 });
+      // Get user profile to determine actual role
+      const userResponse = await fetch(`${API_BASE_AUTH}/profile`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
-      await refreshUser(); // loads profile from /profile
-      router.push("/");
+      if (!userResponse.ok) {
+        throw new Error("Failed to fetch user profile");
+      }
+
+      const userData = await userResponse.json();
+      const actualUserRole =
+        userData.role || userData.userRole || UserRole.USER;
+
+      // Validate that the selected role matches the user's actual role
+      if (role !== actualUserRole) {
+        throw new Error(
+          `You don't have permission to login as ${role}. Your account role is ${actualUserRole}.`
+        );
+      }
+
+      Cookies.set("authToken", token, { expires: 7 });
+      Cookies.set("userRole", actualUserRole, { expires: 7 });
+
+      await fetchUserProfile(token, actualUserRole);
+
+      // Redirect based on actual role
+      switch (actualUserRole) {
+        case UserRole.USER:
+          router.push("/dashboard");
+          break;
+        case UserRole.LAWYER:
+          router.push("/lawyer-dashboard");
+          break;
+        case UserRole.STAFF:
+          router.push("/staff-dashboard");
+          break;
+      }
     } catch (error) {
       throw error;
     }
@@ -199,8 +360,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         body: JSON.stringify(newUser),
       });
 
-      console.log("Sending to API:", JSON.stringify(newUser));
-
       if (!response.ok) {
         const err = await response.json();
         throw new Error(err.message || "Registration failed");
@@ -212,12 +371,93 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const registerLawyer = async (registerData: LawyerRegisterData) => {
+    try {
+      const newLawyer = {
+        accountUsername: registerData.username,
+        accountPassword: registerData.password,
+        accountEmail: registerData.email,
+        accountFullName: registerData.fullName,
+        accountDob: registerData.dob,
+        accountGender: registerData.gender,
+        accountPhone: registerData.phone,
+        accountImage: registerData.image || "",
+        aboutLawyer: registerData.aboutLawyer,
+        serviceForLawyerDTOs: registerData.services,
+      };
+
+      const response = await fetch(`${API_BASE_LAWYER}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(newLawyer),
+      });
+
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.message || "Lawyer registration failed");
+      }
+
+      router.push("/sign-in");
+    } catch (error) {
+      throw error;
+    }
+  };
+
+  const registerStaff = async (registerData: StaffRegisterData) => {
+    try {
+      const newStaff = {
+        username: registerData.username,
+        fullName: registerData.fullName,
+        email: registerData.email,
+        gender: registerData.gender,
+        password: registerData.password,
+        imageUrl: registerData.imageUrl || "",
+      };
+
+      const response = await fetch(`${API_BASE_STAFF}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(newStaff),
+      });
+
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.message || "Staff registration failed");
+      }
+
+      router.push("/sign-in");
+    } catch (error) {
+      throw error;
+    }
+  };
+
   const updateProfile = async (profileData: UpdateProfileData) => {
     try {
       const token = Cookies.get("authToken") || session?.backendToken;
-      if (!token) throw new Error("No user logged in");
+      const userRole = Cookies.get("userRole") as UserRole;
 
-      const response = await fetch(`${API_BASE_URL}/Account/profile/update`, {
+      if (!token || !userRole) throw new Error("No user logged in");
+
+      let apiUrl = "";
+      switch (userRole) {
+        case UserRole.USER:
+          apiUrl = `${API_BASE_AUTH}/profile/update`;
+          break;
+        case UserRole.LAWYER:
+          apiUrl = `${API_BASE_LAWYER}/profile/update`; // Assuming this endpoint exists
+          break;
+        case UserRole.STAFF:
+          apiUrl = `${API_BASE_STAFF}/profile/update`; // Assuming this endpoint exists
+          break;
+        default:
+          throw new Error("Invalid user role");
+      }
+
+      const response = await fetch(apiUrl, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -234,7 +474,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error(err.message || "Update failed");
       }
 
-      // Refresh user data after successful update
       await refreshUser();
     } catch (error) {
       throw error;
@@ -243,10 +482,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     Cookies.remove("authToken");
+    Cookies.remove("userRole");
     Cookies.remove("tokens");
     setUser(null);
 
-    // Sign out from NextAuth if user was logged in via Google
     if (session) {
       await signOut({ redirect: false });
     }
@@ -254,7 +493,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     router.push("/");
   };
 
-  // Fixed forgot password methods
   const requestPasswordReset = async (email: string) => {
     try {
       const response = await fetch(`${API_BASE_FORGOT_PASSWORD}/request`, {
@@ -320,6 +558,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         login,
         loginWithGoogle,
         register,
+        registerLawyer,
+        registerStaff,
         logout,
         requestPasswordReset,
         verifyResetOtp,

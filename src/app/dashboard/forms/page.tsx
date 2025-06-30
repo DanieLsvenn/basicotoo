@@ -28,7 +28,15 @@ import {
 } from "@/components/ui/dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Plus, ArrowLeft, Eye, Edit, Trash2, FileText } from "lucide-react";
+import {
+  Loader2,
+  Plus,
+  ArrowLeft,
+  Eye,
+  Edit,
+  Trash2,
+  FileText,
+} from "lucide-react";
 import { toast } from "sonner";
 
 // Dynamic import for TinyMCE editor to avoid SSR issues
@@ -47,8 +55,8 @@ const CURRENCY_OPTIONS = ["VND", "USD"] as const;
 const USD_TO_VND_RATE = 24000; // Approximate exchange rate
 
 // Types
-type Status = typeof STATUS_OPTIONS[number];
-type Currency = typeof CURRENCY_OPTIONS[number];
+type Status = (typeof STATUS_OPTIONS)[number];
+type Currency = (typeof CURRENCY_OPTIONS)[number];
 
 interface ServiceOption {
   serviceId: string;
@@ -92,7 +100,9 @@ export default function FormTemplatesPage() {
   const [filterMode, setFilterMode] = useState<FilterMode>("all");
   const [currency, setCurrency] = useState<Currency>("VND");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<TemplateListItem | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<TemplateListItem | null>(
+    null
+  );
 
   // --- LOGIC METHODS ---
 
@@ -130,63 +140,76 @@ export default function FormTemplatesPage() {
   }, []);
 
   // Fetch templates
-  const fetchTemplates = useCallback(async (mode: FilterMode = "all") => {
-    setLoading(true);
-    setError(null);
+  const fetchTemplates = useCallback(
+    async (mode: FilterMode = "all") => {
+      setLoading(true);
+      setError(null);
 
-    try {
-      const endpoint = mode === "active" ? "/templates-active" : "/templates";
-      const data = await apiRequest(endpoint);
-      setTemplates(data);
-      setFilterMode(mode);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch templates");
-      toast.error("Failed to fetch templates");
-    } finally {
-      setLoading(false);
-    }
-  }, [apiRequest]);
+      try {
+        const endpoint = mode === "active" ? "/templates-active" : "/templates";
+        const data = await apiRequest(endpoint);
+        setTemplates(data);
+        setFilterMode(mode);
+      } catch (err) {
+        setError(
+          err instanceof Error ? err.message : "Failed to fetch templates"
+        );
+        toast.error("Failed to fetch templates");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [apiRequest]
+  );
 
   // Fetch template by ID
-  const fetchTemplateById = useCallback(async (id: string) => {
-    setLoading(true);
-    setError(null);
+  const fetchTemplateById = useCallback(
+    async (id: string) => {
+      setLoading(true);
+      setError(null);
 
-    try {
-      const data = await apiRequest(`/template/${id}`);
+      try {
+        const data = await apiRequest(`/template/${id}`);
 
-      setFormData({
-        serviceId: data.serviceId || "",
-        formTemplateName: data.formTemplateName || "",
-        formTemplateData: data.formTemplateData || "",
-        status: data.status?.toUpperCase() === "ACTIVE" ? "ACTIVE" : "INACTIVE",
-        price: data.price || 0,
-      });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch template");
-      toast.error("Failed to fetch template");
-    } finally {
-      setLoading(false);
-    }
-  }, [apiRequest]);
+        setFormData({
+          serviceId: data.serviceId || "",
+          formTemplateName: data.formTemplateName || "",
+          formTemplateData: data.formTemplateData || "",
+          status:
+            data.status?.toUpperCase() === "ACTIVE" ? "ACTIVE" : "INACTIVE",
+          price: data.price || 0,
+        });
+      } catch (err) {
+        setError(
+          err instanceof Error ? err.message : "Failed to fetch template"
+        );
+        toast.error("Failed to fetch template");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [apiRequest]
+  );
 
   // Create new template
   const createTemplate = async () => {
     setLoading(true);
     try {
       // Convert price to VND for API
-      const priceInVND = currency === "USD" ? formData.price * USD_TO_VND_RATE : formData.price;
+      const priceInVND =
+        currency === "USD" ? formData.price * USD_TO_VND_RATE : formData.price;
       const payload = { ...formData, price: priceInVND };
 
       await apiRequest("/template", {
         method: "POST",
         body: JSON.stringify(payload),
       });
-      
+
       toast.success("Template created successfully");
       return true;
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Failed to create template";
+      const errorMessage =
+        err instanceof Error ? err.message : "Failed to create template";
       setError(errorMessage);
       toast.error(errorMessage);
       return false;
@@ -198,22 +221,24 @@ export default function FormTemplatesPage() {
   // Update existing template
   const updateTemplate = async () => {
     if (!editingId) return false;
-    
+
     setLoading(true);
     try {
       // Convert price to VND for API
-      const priceInVND = currency === "USD" ? formData.price * USD_TO_VND_RATE : formData.price;
+      const priceInVND =
+        currency === "USD" ? formData.price * USD_TO_VND_RATE : formData.price;
       const payload = { ...formData, price: priceInVND };
 
       await apiRequest(`/template/${editingId}`, {
         method: "PUT",
         body: JSON.stringify(payload),
       });
-      
+
       toast.success("Template updated successfully");
       return true;
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Failed to update template";
+      const errorMessage =
+        err instanceof Error ? err.message : "Failed to update template";
       setError(errorMessage);
       toast.error(errorMessage);
       return false;
@@ -226,7 +251,7 @@ export default function FormTemplatesPage() {
   const deleteTemplate = async (template: TemplateListItem) => {
     const id = getTemplateId(template);
     setLoading(true);
-    
+
     try {
       await apiRequest(`/template/${id}`, { method: "DELETE" });
       toast.success("Template deleted successfully");
@@ -234,7 +259,8 @@ export default function FormTemplatesPage() {
       setDeleteTarget(null);
       await fetchTemplates(filterMode);
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Failed to delete template";
+      const errorMessage =
+        err instanceof Error ? err.message : "Failed to delete template";
       setError(errorMessage);
       toast.error(errorMessage);
     } finally {
@@ -252,8 +278,9 @@ export default function FormTemplatesPage() {
       return;
     }
 
-    const isSuccess = viewMode === "edit" ? await updateTemplate() : await createTemplate();
-    
+    const isSuccess =
+      viewMode === "edit" ? await updateTemplate() : await createTemplate();
+
     if (isSuccess) {
       resetForm();
       setViewMode("list");
@@ -274,19 +301,25 @@ export default function FormTemplatesPage() {
   }, []);
 
   // Format price display
-  const formatPrice = useCallback((price: number): string => {
-    if (currency === "USD") {
-      const priceInUSD = price / USD_TO_VND_RATE;
-      return `$${priceInUSD.toFixed(2)}`;
-    }
-    return `${price.toLocaleString("en-US")} VND`;
-  }, [currency]);
+  const formatPrice = useCallback(
+    (price: number): string => {
+      if (currency === "USD") {
+        const priceInUSD = price / USD_TO_VND_RATE;
+        return `$${priceInUSD.toFixed(2)}`;
+      }
+      return `${price.toLocaleString("en-US")} VND`;
+    },
+    [currency]
+  );
 
   // Get service name by ID
-  const getServiceName = useCallback((serviceId: string): string => {
-    const service = services.find(s => s.serviceId === serviceId);
-    return service ? service.serviceName : serviceId;
-  }, [services]);
+  const getServiceName = useCallback(
+    (serviceId: string): string => {
+      const service = services.find((s) => s.serviceId === serviceId);
+      return service ? service.serviceName : serviceId;
+    },
+    [services]
+  );
 
   // --- HANDLER METHODS ---
 
@@ -297,19 +330,25 @@ export default function FormTemplatesPage() {
   }, [resetForm]);
 
   // Handle editing template
-  const handleEdit = useCallback(async (template: TemplateListItem) => {
-    const id = getTemplateId(template);
-    setEditingId(id);
-    await fetchTemplateById(id);
-    setViewMode("edit");
-  }, [getTemplateId, fetchTemplateById]);
+  const handleEdit = useCallback(
+    async (template: TemplateListItem) => {
+      const id = getTemplateId(template);
+      setEditingId(id);
+      await fetchTemplateById(id);
+      setViewMode("edit");
+    },
+    [getTemplateId, fetchTemplateById]
+  );
 
   // Handle viewing template
-  const handleView = useCallback(async (template: TemplateListItem) => {
-    const id = getTemplateId(template);
-    await fetchTemplateById(id);
-    setViewMode("view");
-  }, [getTemplateId, fetchTemplateById]);
+  const handleView = useCallback(
+    async (template: TemplateListItem) => {
+      const id = getTemplateId(template);
+      await fetchTemplateById(id);
+      setViewMode("view");
+    },
+    [getTemplateId, fetchTemplateById]
+  );
 
   // Handle delete confirmation
   const handleDelete = (template: TemplateListItem) => {
@@ -337,21 +376,27 @@ export default function FormTemplatesPage() {
 
   // Handle content change from editor
   const handleContentChange = useCallback((content: string) => {
-    setFormData(prev => ({ ...prev, formTemplateData: content }));
+    setFormData((prev) => ({ ...prev, formTemplateData: content }));
   }, []);
 
   // Handle input field changes
-  const handleInputChange = useCallback((field: keyof FormTemplate, value: string | number) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-  }, []);
+  const handleInputChange = useCallback(
+    (field: keyof FormTemplate, value: string | number) => {
+      setFormData((prev) => ({ ...prev, [field]: value }));
+    },
+    []
+  );
 
   // Handle price change with validation
-  const handlePriceChange = useCallback((value: string) => {
-    const numericValue = parseFloat(value);
-    if (!isNaN(numericValue) && numericValue >= 0) {
-      handleInputChange("price", numericValue);
-    }
-  }, [handleInputChange]);
+  const handlePriceChange = useCallback(
+    (value: string) => {
+      const numericValue = parseFloat(value);
+      if (!isNaN(numericValue) && numericValue >= 0) {
+        handleInputChange("price", numericValue);
+      }
+    },
+    [handleInputChange]
+  );
 
   // Effects
   useEffect(() => {
@@ -375,12 +420,15 @@ export default function FormTemplatesPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Select value={currency} onValueChange={(value: Currency) => setCurrency(value)}>
+          <Select
+            value={currency}
+            onValueChange={(value: Currency) => setCurrency(value)}
+          >
             <SelectTrigger className="w-20">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {CURRENCY_OPTIONS.map(curr => (
+              {CURRENCY_OPTIONS.map((curr) => (
                 <SelectItem key={curr} value={curr}>
                   {curr}
                 </SelectItem>
@@ -437,7 +485,7 @@ export default function FormTemplatesPage() {
                     <CardTitle className="text-base sm:text-lg leading-tight">
                       <span
                         className="block break-words hyphens-auto line-clamp-2"
-                        style={{ wordBreak: 'break-word' }}
+                        style={{ wordBreak: "break-word" }}
                         title={template.formTemplateName}
                       >
                         {template.formTemplateName}
@@ -446,7 +494,7 @@ export default function FormTemplatesPage() {
                     <CardDescription className="text-xs sm:text-sm">
                       <span
                         className="block break-words hyphens-auto line-clamp-1"
-                        style={{ wordBreak: 'break-word' }}
+                        style={{ wordBreak: "break-word" }}
                         title={`Service: ${getServiceName(template.serviceId)}`}
                       >
                         Service: {getServiceName(template.serviceId)}
@@ -571,7 +619,9 @@ export default function FormTemplatesPage() {
                 <Input
                   id="templateName"
                   value={formData.formTemplateName}
-                  onChange={(e) => handleInputChange("formTemplateName", e.target.value)}
+                  onChange={(e) =>
+                    handleInputChange("formTemplateName", e.target.value)
+                  }
                   placeholder="Enter template name"
                   required
                 />
@@ -580,16 +630,21 @@ export default function FormTemplatesPage() {
                 <Label htmlFor="service">Service *</Label>
                 <Select
                   value={formData.serviceId}
-                  onValueChange={(value) => handleInputChange("serviceId", value)}
+                  onValueChange={(value) =>
+                    handleInputChange("serviceId", value)
+                  }
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select a service" />
                   </SelectTrigger>
                   <SelectContent>
                     {services
-                      .filter(service => service.status === "Active")
-                      .map(service => (
-                        <SelectItem key={service.serviceId} value={service.serviceId}>
+                      .filter((service) => service.status === "Active")
+                      .map((service) => (
+                        <SelectItem
+                          key={service.serviceId}
+                          value={service.serviceId}
+                        >
                           {service.serviceName}
                         </SelectItem>
                       ))}
@@ -603,13 +658,15 @@ export default function FormTemplatesPage() {
                 <Label htmlFor="status">Status</Label>
                 <Select
                   value={formData.status}
-                  onValueChange={(value: Status) => handleInputChange("status", value)}
+                  onValueChange={(value: Status) =>
+                    handleInputChange("status", value)
+                  }
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select status" />
                   </SelectTrigger>
                   <SelectContent>
-                    {STATUS_OPTIONS.map(status => (
+                    {STATUS_OPTIONS.map((status) => (
                       <SelectItem key={status} value={status}>
                         {status}
                       </SelectItem>
@@ -656,10 +713,14 @@ export default function FormTemplatesPage() {
                 {loading
                   ? "Saving..."
                   : viewMode === "create"
-                    ? "Create Template"
-                    : "Update Template"}
+                  ? "Create Template"
+                  : "Update Template"}
               </Button>
-              <Button type="button" variant="outline" onClick={handleBackToList}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleBackToList}
+              >
                 Cancel
               </Button>
             </div>
@@ -692,9 +753,7 @@ export default function FormTemplatesPage() {
             {formData.formTemplateName || "Unnamed Template"}
             {formData.status && (
               <Badge
-                variant={
-                  formData.status === "ACTIVE" ? "default" : "secondary"
-                }
+                variant={formData.status === "ACTIVE" ? "default" : "secondary"}
               >
                 {formData.status}
               </Badge>
@@ -708,7 +767,9 @@ export default function FormTemplatesPage() {
                 Service
               </Label>
               <p className="font-medium">
-                {formData.serviceId ? getServiceName(formData.serviceId) : "No service selected"}
+                {formData.serviceId
+                  ? getServiceName(formData.serviceId)
+                  : "No service selected"}
               </p>
             </div>
             <div className="space-y-1">
@@ -728,7 +789,8 @@ export default function FormTemplatesPage() {
             <div className="border rounded-md p-4 bg-muted/50 prose max-w-none min-h-[200px]">
               <div
                 dangerouslySetInnerHTML={{
-                  __html: formData.formTemplateData || "<p>No content available</p>",
+                  __html:
+                    formData.formTemplateData || "<p>No content available</p>",
                 }}
               />
             </div>
@@ -740,14 +802,16 @@ export default function FormTemplatesPage() {
       <div className="flex gap-4">
         <Button
           onClick={() => {
-            const template = templates.find(t => getTemplateId(t) === editingId) || {
-              formTemplateId: editingId,
-              serviceId: formData.serviceId,
-              formTemplateName: formData.formTemplateName,
-              formTemplateData: formData.formTemplateData,
-              status: formData.status,
-              price: formData.price,
-            } as TemplateListItem;
+            const template =
+              templates.find((t) => getTemplateId(t) === editingId) ||
+              ({
+                formTemplateId: editingId,
+                serviceId: formData.serviceId,
+                formTemplateName: formData.formTemplateName,
+                formTemplateData: formData.formTemplateData,
+                status: formData.status,
+                price: formData.price,
+              } as TemplateListItem);
             handleEdit(template);
           }}
         >

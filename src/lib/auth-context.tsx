@@ -3,7 +3,6 @@
 
 import { createContext, useContext, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useSession, signIn, signOut } from "next-auth/react";
 import Cookies from "js-cookie";
 
 // Define user roles - match your backend exactly
@@ -51,7 +50,7 @@ interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   login: (username: string, password: string, role?: UserRole) => Promise<void>;
-  loginWithGoogle: () => Promise<void>;
+  loginWithGoogle: (credential: string) => Promise<void>;
   register: (data: RegisterData) => Promise<void>;
   registerLawyer: (data: LawyerRegisterData) => Promise<void>;
   registerStaff: (data: StaffRegisterData) => Promise<void>;
@@ -113,121 +112,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
-  const { data: session, status } = useSession();
 
   useEffect(() => {
     checkAuth();
-  }, [session, status]);
+  }, []);
 
   const checkAuth = async () => {
-    if (status === "loading") {
+    const token = Cookies.get("authToken");
+    const userRole = Cookies.get("userRole") as UserRole;
+
+    if (!token || !userRole) {
+      setIsLoading(false);
       return;
     }
 
-    if (session?.backendToken) {
-      // Handle NextAuth session with backend token
-      try {
-        const response = await fetch(`${API_BASE_AUTH}/profile`, {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${session.backendToken}`,
-          },
-        });
-
-        if (response.ok) {
-          const userData = await response.json();
-
-          // Map the user data based on the actual role returned by backend
-          let mappedUser: User;
-          const userRole = userData.role || userData.userRole || UserRole.USER;
-
-          switch (userRole) {
-            case UserRole.LAWYER:
-              mappedUser = {
-                id: userData.id || userData.accountId,
-                email: userData.email,
-                name: userData.fullName || userData.name,
-                username: userData.username,
-                role: UserRole.LAWYER,
-                aboutLawyer: userData.aboutLawyer,
-                phone: userData.phone,
-                dob: userData.dob,
-                gender: userData.gender,
-                services: userData.services,
-                image: userData.image || session.user?.image || "",
-              } as LawyerUser;
-              break;
-
-            case UserRole.STAFF:
-              mappedUser = {
-                id: userData.id || userData.accountId,
-                email: userData.email,
-                name: userData.fullName || userData.name,
-                username: userData.username,
-                role: UserRole.STAFF,
-                fullName: userData.fullName,
-                gender: userData.gender,
-                image:
-                  userData.imageUrl ||
-                  userData.image ||
-                  session.user?.image ||
-                  "",
-              } as StaffUser;
-              break;
-
-            default: // UserRole.USER
-              mappedUser = {
-                id: userData.accountId || userData.id,
-                email: userData.email,
-                name: userData.fullName || userData.name,
-                username: userData.username,
-                role: UserRole.USER,
-                fullName: userData.fullName,
-                gender: userData.gender,
-                accountTicketRequest: userData.accountTicketRequest,
-                image: userData.image || session.user?.image || "",
-              } as RegularUser;
-
-              if (userData.accountTicketRequest) {
-                Cookies.set(
-                  "tokens",
-                  userData.accountTicketRequest.toString(),
-                  {
-                    expires: 7,
-                  }
-                );
-              }
-              break;
-          }
-
-          setUser(mappedUser);
-
-          // Store in cookies for middleware
-          Cookies.set("authToken", session.backendToken, { expires: 7 });
-          Cookies.set("userRole", userRole, { expires: 7 });
-        } else {
-          throw new Error("Failed to fetch profile");
-        }
-      } catch (err) {
-        console.error("Failed to fetch user profile from Google session", err);
-        await signOut({ redirect: false });
-      }
-    } else {
-      // Check for regular authentication token
-      const token = Cookies.get("authToken");
-      const userRole = Cookies.get("userRole") as UserRole;
-
-      if (!token || !userRole) {
-        setIsLoading(false);
-        return;
-      }
-
-      try {
-        await fetchUserProfile(token, userRole);
-      } catch (err) {
-        console.error("Failed to fetch user profile", err);
-        logout();
-      }
+    try {
+      await fetchUserProfile(token, userRole);
+    } catch (err) {
+      console.error("Failed to fetch user profile", err);
+      logout();
     }
 
     setIsLoading(false);
@@ -393,17 +296,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const loginWithGoogle = async () => {
+  const loginWithGoogle = async (credential: string) => {
     try {
-      // This will trigger NextAuth Google OAuth flow
-      // The backend integration happens in the NextAuth callbacks
-      await signIn("google", {
-        callbackUrl: "/dashboard", // Default callback, will be updated based on role
-        redirect: true,
+      console.log("Google credential:", credential);
+
+      const response = await fetch(`${API_BASE_AUTH}/signin-google`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idToken: credential }),
       });
+
+      if (!response.ok) {
+        throw new Error("Google sign-in failed");
+      }
+
+      const data = await response.json();
+
+      Cookies.set("authToken", data.token, { expires: 7 });
+      Cookies.set("userRole", data.role, { expires: 7 });
+
+      if (data.role === UserRole.USER && data.tokens) {
+        Cookies.set("tokens", data.tokens.toString(), { expires: 7 });
+      }
+
+      await fetchUserProfile(data.token, data.role);
+
+      // redirect based on role
+      if (data.role === UserRole.LAWYER) router.push("/lawyer-dashboard");
+      else if (data.role === UserRole.STAFF) router.push("/staff-dashboard");
+      else router.push("/dashboard");
     } catch (error) {
       console.error("Google sign-in failed:", error);
-      throw new Error("Google sign-in failed");
+      throw error;
     }
   };
 
@@ -503,7 +427,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const updateProfile = async (profileData: UpdateProfileData) => {
     try {
-      const token = Cookies.get("authToken") || session?.backendToken;
+      const token = Cookies.get("authToken");
       const userRole = Cookies.get("userRole") as UserRole;
 
       if (!token || !userRole) throw new Error("No user logged in");
@@ -519,8 +443,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         case UserRole.STAFF:
           apiUrl = `${API_BASE_STAFF}/profile/update`;
           break;
-        default:
-          throw new Error("Invalid user role");
       }
 
       const response = await fetch(apiUrl, {
@@ -529,10 +451,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          fullName: profileData.fullName,
-          gender: profileData.gender,
-        }),
+        body: JSON.stringify(profileData),
       });
 
       if (!response.ok) {
@@ -551,10 +470,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     Cookies.remove("userRole");
     Cookies.remove("tokens");
     setUser(null);
-
-    if (session) {
-      await signOut({ redirect: false });
-    }
 
     router.push("/");
   };

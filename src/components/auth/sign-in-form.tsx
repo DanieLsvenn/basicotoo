@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useAuth, UserRole } from "@/lib/auth-context";
+import { useGoogleLogin } from "@react-oauth/google";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,18 +33,25 @@ export function SignInForm() {
     }
   };
 
-  const handleGoogleSignIn = async () => {
-    setError("");
-    setIsGoogleLoading(true);
+  const handleGoogleSignIn = useGoogleLogin({
+    onSuccess: async (tokenResponse) => {
+      setError("");
+      setIsGoogleLoading(true);
 
-    try {
-      await loginWithGoogle();
-    } catch (err: any) {
-      setError(err.message || "Google sign-in failed");
-    } finally {
+      try {
+        await loginWithGoogle(tokenResponse.access_token);
+      } catch (err: any) {
+        setError(err.message || "Google sign-in failed");
+      } finally {
+        setIsGoogleLoading(false);
+      }
+    },
+    onError: () => {
+      setError("Google sign-in failed");
       setIsGoogleLoading(false);
-    }
-  };
+    },
+    flow: "implicit",
+  });
 
   const getRoleIcon = (role: UserRole) => {
     switch (role) {
@@ -86,7 +94,7 @@ export function SignInForm() {
           <Button
             type="button"
             variant="outline"
-            onClick={handleGoogleSignIn}
+            onClick={() => handleGoogleSignIn()}
             disabled={isGoogleLoading || isLoading}
             className="w-full mb-4 flex items-center justify-center gap-2"
           >

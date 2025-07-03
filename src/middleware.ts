@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getToken } from "next-auth/jwt";
 
 // Define user roles
 enum UserRole {
@@ -11,14 +10,13 @@ enum UserRole {
 export async function middleware(request: NextRequest) {
   const url = request.nextUrl;
 
-  // Check for both NextAuth session and custom auth token
-  const nextAuthToken = await getToken({ req: request });
+  // Check for both NextAuth session and custom auth tokenW
   const authToken = request.cookies.get("authToken")?.value;
   const userRole = request.cookies.get("userRole")?.value as UserRole;
   const tokens = Number(request.cookies.get("tokens")?.value || "0");
 
   // User is authenticated if they have either NextAuth token or custom auth token
-  const isAuthenticated = !!nextAuthToken || !!authToken;
+  const isAuthenticated = !!authToken;
 
   // Protect authentication routes - redirect to appropriate dashboard if already logged in
   if (

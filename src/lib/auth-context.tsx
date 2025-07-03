@@ -1,3 +1,4 @@
+// lib/auth-context.tsx
 "use client";
 
 import { createContext, useContext, useEffect, useState } from "react";
@@ -5,11 +6,11 @@ import { useRouter } from "next/navigation";
 import { useSession, signIn, signOut } from "next-auth/react";
 import Cookies from "js-cookie";
 
-// Define user roles
+// Define user roles - match your backend exactly
 export enum UserRole {
-  USER = "user",
-  LAWYER = "lawyer",
-  STAFF = "staff",
+  USER = "USER",
+  LAWYER = "LAWYER",
+  STAFF = "STAFF",
 }
 
 interface BaseUser {
@@ -124,7 +125,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (session?.backendToken) {
-      // Handle Google OAuth session (assuming it's always for regular users)
+      // Handle NextAuth session with backend token
       try {
         const response = await fetch(`${API_BASE_AUTH}/profile`, {
           method: "GET",
@@ -135,23 +136,81 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (response.ok) {
           const userData = await response.json();
-          const mappedUser: RegularUser = {
-            id: userData.accountId || userData.id,
-            email: userData.email,
-            name: userData.fullName,
-            username: userData.username,
-            role: UserRole.USER,
-            fullName: userData.fullName,
-            gender: userData.gender,
-            accountTicketRequest: userData.accountTicketRequest,
-            image: userData.image || "",
-          };
+
+          // Map the user data based on the actual role returned by backend
+          let mappedUser: User;
+          const userRole = userData.role || userData.userRole || UserRole.USER;
+
+          switch (userRole) {
+            case UserRole.LAWYER:
+              mappedUser = {
+                id: userData.id || userData.accountId,
+                email: userData.email,
+                name: userData.fullName || userData.name,
+                username: userData.username,
+                role: UserRole.LAWYER,
+                aboutLawyer: userData.aboutLawyer,
+                phone: userData.phone,
+                dob: userData.dob,
+                gender: userData.gender,
+                services: userData.services,
+                image: userData.image || session.user?.image || "",
+              } as LawyerUser;
+              break;
+
+            case UserRole.STAFF:
+              mappedUser = {
+                id: userData.id || userData.accountId,
+                email: userData.email,
+                name: userData.fullName || userData.name,
+                username: userData.username,
+                role: UserRole.STAFF,
+                fullName: userData.fullName,
+                gender: userData.gender,
+                image:
+                  userData.imageUrl ||
+                  userData.image ||
+                  session.user?.image ||
+                  "",
+              } as StaffUser;
+              break;
+
+            default: // UserRole.USER
+              mappedUser = {
+                id: userData.accountId || userData.id,
+                email: userData.email,
+                name: userData.fullName || userData.name,
+                username: userData.username,
+                role: UserRole.USER,
+                fullName: userData.fullName,
+                gender: userData.gender,
+                accountTicketRequest: userData.accountTicketRequest,
+                image: userData.image || session.user?.image || "",
+              } as RegularUser;
+
+              if (userData.accountTicketRequest) {
+                Cookies.set(
+                  "tokens",
+                  userData.accountTicketRequest.toString(),
+                  {
+                    expires: 7,
+                  }
+                );
+              }
+              break;
+          }
+
           setUser(mappedUser);
+
+          // Store in cookies for middleware
           Cookies.set("authToken", session.backendToken, { expires: 7 });
-          Cookies.set("userRole", UserRole.USER, { expires: 7 });
+          Cookies.set("userRole", userRole, { expires: 7 });
+        } else {
+          throw new Error("Failed to fetch profile");
         }
       } catch (err) {
         console.error("Failed to fetch user profile from Google session", err);
+        await signOut({ redirect: false });
       }
     } else {
       // Check for regular authentication token
@@ -182,10 +241,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         apiUrl = `${API_BASE_AUTH}/profile`;
         break;
       case UserRole.LAWYER:
-        apiUrl = `${API_BASE_LAWYER}/profile`; // Assuming this endpoint exists
+        apiUrl = `${API_BASE_LAWYER}/profile`;
         break;
       case UserRole.STAFF:
-        apiUrl = `${API_BASE_STAFF}/profile`; // Assuming this endpoint exists
+        apiUrl = `${API_BASE_STAFF}/profile`;
         break;
       default:
         throw new Error("Invalid user role");
@@ -218,6 +277,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           accountTicketRequest: userData.accountTicketRequest,
           image: userData.image || "",
         } as RegularUser;
+
+        if (userData.accountTicketRequest) {
+          Cookies.set("tokens", userData.accountTicketRequest.toString(), {
+            expires: 7,
+          });
+        }
         break;
 
       case UserRole.LAWYER:
@@ -263,7 +328,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     password: string,
     role: UserRole = UserRole.USER
   ) => {
-    // Use the same login endpoint for all roles
     const apiUrl = `${API_BASE_AUTH}/login`;
     const requestBody = { username, password };
 
@@ -331,8 +395,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const loginWithGoogle = async () => {
     try {
+      // This will trigger NextAuth Google OAuth flow
+      // The backend integration happens in the NextAuth callbacks
       await signIn("google", {
-        callbackUrl: "/dashboard",
+        callbackUrl: "/dashboard", // Default callback, will be updated based on role
         redirect: true,
       });
     } catch (error) {
@@ -448,10 +514,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           apiUrl = `${API_BASE_AUTH}/profile/update`;
           break;
         case UserRole.LAWYER:
-          apiUrl = `${API_BASE_LAWYER}/profile/update`; // Assuming this endpoint exists
+          apiUrl = `${API_BASE_LAWYER}/profile/update`;
           break;
         case UserRole.STAFF:
-          apiUrl = `${API_BASE_STAFF}/profile/update`; // Assuming this endpoint exists
+          apiUrl = `${API_BASE_STAFF}/profile/update`;
           break;
         default:
           throw new Error("Invalid user role");

@@ -325,7 +325,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // redirect based on role
       if (role === UserRole.LAWYER) router.push("/lawyer-dashboard");
       else if (role === UserRole.STAFF) router.push("/staff-dashboard");
-      else router.push("/dashboard");
+      else router.push("/");
     } catch (error) {
       console.error("Google sign-in failed:", error);
       throw error;

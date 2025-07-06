@@ -10,6 +10,7 @@ import {
   FileText,
   Package,
   LayoutDashboard,
+  Archive,
 } from "lucide-react";
 
 const navItems = [
@@ -46,7 +47,7 @@ const navItems = [
   {
     title: "View Requests",
     href: "/dashboard/staff-dashboard",
-    icon: Settings,
+    icon: Archive,
   },
 ];
 

@@ -298,7 +298,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const loginWithGoogle = async (credential: string) => {
     try {
-      console.log("Google credential:", credential);
+      // console.log("Google credential:", credential);
 
       const response = await fetch(`${API_BASE_AUTH}/signin-google`, {
         method: "POST",
@@ -311,19 +311,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       const data = await response.json();
+      const role = data.role || "USER";
 
       Cookies.set("authToken", data.token, { expires: 7 });
       Cookies.set("userRole", data.role, { expires: 7 });
 
-      if (data.role === UserRole.USER && data.tokens) {
+      if (role === UserRole.USER && data.tokens) {
         Cookies.set("tokens", data.tokens.toString(), { expires: 7 });
       }
 
-      await fetchUserProfile(data.token, data.role);
+      await fetchUserProfile(data.token, role);
 
       // redirect based on role
-      if (data.role === UserRole.LAWYER) router.push("/lawyer-dashboard");
-      else if (data.role === UserRole.STAFF) router.push("/staff-dashboard");
+      if (role === UserRole.LAWYER) router.push("/lawyer-dashboard");
+      else if (role === UserRole.STAFF) router.push("/staff-dashboard");
       else router.push("/dashboard");
     } catch (error) {
       console.error("Google sign-in failed:", error);

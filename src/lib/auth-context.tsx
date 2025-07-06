@@ -50,7 +50,7 @@ interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   login: (username: string, password: string) => Promise<void>;
-  loginWithGoogle: () => Promise<void>;
+  loginWithGoogle: (credential: string) => Promise<void>;
   register: (data: RegisterData) => Promise<void>;
   registerLawyer: (data: LawyerRegisterData) => Promise<void>;
   registerStaff: (data: StaffRegisterData) => Promise<void>;
@@ -119,62 +119,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [session, status]);
 
   const checkAuth = async () => {
-    if (status === "loading") {
+    const token = Cookies.get("authToken");
+    const userRole = Cookies.get("userRole") as UserRole;
+
+    if (!token || !userRole) {
+      setIsLoading(false);
       return;
     }
 
-    if (session?.backendToken) {
-      // Handle Google OAuth session (assuming it's always for regular users)
-      try {
-        const response = await fetch(`${API_BASE_AUTH}/profile`, {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${session.backendToken}`,
-          },
-        });
-
-        if (response.ok) {
-          const userData = await response.json();
-          const mappedUser: RegularUser = {
-            id: userData.accountId || userData.id,
-            email: userData.email,
-            name: userData.fullName,
-            username: userData.username,
-            role: UserRole.USER,
-            fullName: userData.fullName,
-            gender: userData.gender,
-            accountTicketRequest: userData.accountTicketRequest,
-            image: userData.image || "",
-          };
-          setUser(mappedUser);
-          Cookies.set("authToken", session.backendToken, { expires: 7 });
-          Cookies.set("userRole", UserRole.USER, { expires: 7 });
-        }
-      } catch (err) {
-        console.error("Failed to fetch user profile from Google session", err);
-      }
-    } else {
-      // Check for regular authentication token
-      const token = Cookies.get("authToken");
-      const userRole = Cookies.get("userRole") as UserRole;
-
-      if (!token) {
-        setIsLoading(false);
-        return;
-      }
-
-      try {
-        if (userRole) {
-          // If we have a stored role, fetch profile with that role
-          await fetchUserProfile(token, userRole);
-        } else {
-          // If no stored role, try to determine from the profile endpoint
-          await determineUserRoleAndFetchProfile(token);
-        }
-      } catch (err) {
-        console.error("Failed to fetch user profile", err);
-        logout();
-      }
+    try {
+      await fetchUserProfile(token, userRole);
+    } catch (err) {
+      console.error("Failed to fetch user profile", err);
+      logout();
     }
 
     setIsLoading(false);
@@ -194,7 +151,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     const userData = await response.json();
-    
+
     // Determine role from the userData (adjust these field names based on your backend response)
     let userRole: UserRole;
     if (userData.role) {
@@ -250,7 +207,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             Authorization: `Bearer ${token}`,
           },
         });
-        
+
         if (fallbackResponse.ok) {
           userData = await fallbackResponse.json();
         } else {
@@ -278,6 +235,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           accountTicketRequest: userData.accountTicketRequest,
           image: userData.image || "",
         } as RegularUser;
+
+        if (userData.accountTicketRequest) {
+          Cookies.set("tokens", userData.accountTicketRequest.toString(), {
+            expires: 7,
+          });
+        }
         break;
 
       case UserRole.LAWYER:
@@ -364,12 +327,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const loginWithGoogle = async () => {
+  const loginWithGoogle = async (credential: string) => {
     try {
-      await signIn("google", {
-        callbackUrl: "/dashboard",
-        redirect: true,
+      // console.log("Google credential:", credential);
+
+      const response = await fetch(`${API_BASE_AUTH}/signin-google`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idToken: credential }),
       });
+
+      if (!response.ok) {
+        throw new Error("Google sign-in failed");
+      }
+
+      const data = await response.json();
+      const role = data.role || "USER";
+
+      Cookies.set("authToken", data.token, { expires: 7 });
+      Cookies.set("userRole", data.role, { expires: 7 });
+
+      if (role === UserRole.USER && data.tokens) {
+        Cookies.set("tokens", data.tokens.toString(), { expires: 7 });
+      }
+
+      await fetchUserProfile(data.token, role);
+
+      // redirect based on role
+      if (role === UserRole.LAWYER) router.push("/dashboard/lawyer-dashboard");
+      else if (role === UserRole.STAFF) router.push("/dashboard/staff-dashboard");
+      else router.push("/");
     } catch (error) {
       console.error("Google sign-in failed:", error);
       throw new Error("Google sign-in failed");
@@ -474,7 +461,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const updateProfile = async (profileData: UpdateProfileData) => {
     try {
-      const token = Cookies.get("authToken") || session?.backendToken;
+      const token = Cookies.get("authToken");
       const userRole = Cookies.get("userRole") as UserRole;
 
       if (!token || !userRole) throw new Error("No user logged in");

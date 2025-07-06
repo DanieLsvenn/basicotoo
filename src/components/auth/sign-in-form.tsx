@@ -1,18 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { useAuth, UserRole } from "@/lib/auth-context";
+import { useAuth } from "@/lib/auth-context";
 import { GoogleLogin } from "@react-oauth/google";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Eye, EyeOff, User, Scale, Users } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
 
 export function SignInForm() {
   const [userName, setUserName] = useState("");
   const [password, setPassword] = useState("");
-  const [selectedRole, setSelectedRole] = useState<UserRole>(UserRole.USER);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -25,57 +24,11 @@ export function SignInForm() {
     setIsLoading(true);
 
     try {
-      await login(userName, password, selectedRole);
+      await login(userName, password);
     } catch (err: any) {
       setError(err.message || "Login failed");
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  // const handleGoogleSignIn = useGoogleLogin({
-  //   onSuccess: async (tokenResponse) => {
-  //     setError("");
-  //     setIsGoogleLoading(true);
-
-  //     try {
-  //       await loginWithGoogle(tokenResponse.access_token);
-  //     } catch (err: any) {
-  //       setError(err.message || "Google sign-in failed");
-  //     } finally {
-  //       setIsGoogleLoading(false);
-  //     }
-  //   },
-  //   onError: () => {
-  //     setError("Google sign-in failed");
-  //     setIsGoogleLoading(false);
-  //   },
-  //   flow: "implicit",
-  // });
-
-  const getRoleIcon = (role: UserRole) => {
-    switch (role) {
-      case UserRole.USER:
-        return <User className="w-4 h-4" />;
-      case UserRole.LAWYER:
-        return <Scale className="w-4 h-4" />;
-      case UserRole.STAFF:
-        return <Users className="w-4 h-4" />;
-      default:
-        return <User className="w-4 h-4" />;
-    }
-  };
-
-  const getRoleLabel = (role: UserRole) => {
-    switch (role) {
-      case UserRole.USER:
-        return "User";
-      case UserRole.LAWYER:
-        return "Lawyer";
-      case UserRole.STAFF:
-        return "Staff";
-      default:
-        return "User";
     }
   };
 
@@ -88,10 +41,8 @@ export function SignInForm() {
         </p>
       </div>
 
-      {/* Google Sign-In Button - Only for regular users */}
-      {selectedRole === UserRole.USER && (
-        <>
-          <div className="w-full mb-4 flex items-center justify-center gap-2">
+      {/* Google Sign-In Button */}
+      <div className="w-full mb-4 flex items-center justify-center gap-2">
             <GoogleLogin
               onSuccess={async (credentialResponse) => {
                 setError("");
@@ -128,8 +79,6 @@ export function SignInForm() {
               </span>
             </div>
           </div>
-        </>
-      )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
@@ -182,9 +131,7 @@ export function SignInForm() {
           className="w-full"
           disabled={isLoading || isGoogleLoading}
         >
-          {isLoading
-            ? "Signing in..."
-            : `Sign In as ${getRoleLabel(selectedRole)}`}
+          {isLoading ? "Signing in..." : "Sign In"}
         </Button>
       </form>
 
@@ -197,9 +144,9 @@ export function SignInForm() {
         </Link>
         <div className="text-sm text-gray-600 space-y-1">
           <p>
-            Don't have a user account?{" "}
+            Don't have an account?{" "}
             <Link href="/sign-up" className="text-blue-600 hover:text-blue-800">
-              Sign up as User
+              Sign up
             </Link>
           </p>
         </div>

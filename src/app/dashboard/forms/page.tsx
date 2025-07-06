@@ -1,3 +1,5 @@
+// src/app/dashboard/forms/page.tsx
+
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
@@ -100,6 +102,7 @@ export default function FormTemplatesPage() {
   const [deleteTarget, setDeleteTarget] = useState<TemplateListItem | null>(
     null
   );
+  const [refreshKey, setRefreshKey] = useState(0);
 
   // --- LOGIC METHODS ---
 
@@ -198,6 +201,7 @@ export default function FormTemplatesPage() {
       });
 
       toast.success("Template created successfully");
+      setRefreshKey((prev) => prev + 1);
       return true;
     } catch (err) {
       const errorMessage =
@@ -222,6 +226,7 @@ export default function FormTemplatesPage() {
       });
 
       toast.success("Template updated successfully");
+      setRefreshKey((prev) => prev + 1);
       return true;
     } catch (err) {
       const errorMessage =
@@ -244,7 +249,7 @@ export default function FormTemplatesPage() {
       toast.success("Template deleted successfully");
       setDeleteDialogOpen(false);
       setDeleteTarget(null);
-      await fetchTemplates(filterMode);
+      setRefreshKey((prev) => prev + 1);
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : "Failed to delete template";
@@ -271,7 +276,6 @@ export default function FormTemplatesPage() {
     if (isSuccess) {
       resetForm();
       setViewMode("list");
-      await fetchTemplates(filterMode);
     }
   };
 
@@ -381,16 +385,20 @@ export default function FormTemplatesPage() {
   // Handle filter mode change
   const handleFilterChange = useCallback(
     (mode: FilterMode) => {
-      fetchTemplates(mode);
+      setFilterMode(mode);
+      setRefreshKey((prev) => prev + 1);
     },
-    [fetchTemplates]
+    []
   );
 
   // Effects
   useEffect(() => {
-    fetchTemplates("all");
+    fetchTemplates(filterMode);
+  }, [refreshKey, filterMode, fetchTemplates]);
+
+  useEffect(() => {
     fetchServices();
-  }, [fetchTemplates, fetchServices]);
+  }, [fetchServices]);
 
   // --- RENDER METHODS ---
 

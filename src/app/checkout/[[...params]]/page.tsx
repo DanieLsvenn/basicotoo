@@ -1,3 +1,5 @@
+// src/app/checkout/[...params]/page.tsx
+
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
@@ -16,14 +18,15 @@ import {
   Package,
   Ticket,
   Plus,
-  Minus
+  Minus,
+  MessageCircleMore
 } from "lucide-react";
 import { MaxWidthWrapper } from "@/components/max-width-wrapper";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Calendar } from "@/components/ui/calendar";
-import { 
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -37,6 +40,8 @@ import {
 import { toast } from "sonner";
 import Cookies from "js-cookie";
 import { notFound } from "next/navigation";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 
 // Types for booking
 interface Service {
@@ -98,6 +103,24 @@ interface CheckoutMode {
   ids: Record<string, string>;
 }
 
+interface OrderDetail {
+  orderDetailId: string;
+  orderId: string;
+  ticketPackageId: string;
+  formTemplateId: string | null;
+  quantity: number;
+  price: number;
+}
+
+interface PendingOrder {
+  orderId: string;
+  userId: string;
+  totalPrice: number;
+  status: string;
+  orderDetails: OrderDetail[];
+  payment: any;
+}
+
 // Helper functions
 function getInitials(name: string): string {
   return name
@@ -145,7 +168,7 @@ function parseCheckoutParams(params: string[]): CheckoutMode | null {
     };
   } else if (params[0] === "ticket" && params.length === 2) {
     return {
-      mode: "ticket", 
+      mode: "ticket",
       ids: { ticketPackageId: params[1] }
     };
   }
@@ -171,7 +194,7 @@ export default function CheckoutPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [orderProcessing, setOrderProcessing] = useState(false);
-  const [usdToVndRate, setUsdToVndRate] = useState<number>(24000);
+  const [usdToVndRate, setUsdToVndRate] = useState<number>(0);
 
   // Booking-specific state
   const [service, setService] = useState<Service | null>(null);
@@ -188,10 +211,13 @@ export default function CheckoutPage() {
   const [bookingId, setBookingId] = useState<string | null>(null);
   const [pendingBookings, setPendingBookings] = useState<PendingBooking[]>([]);
   const [cancellingBookings, setCancellingBookings] = useState<Set<string>>(new Set());
+  const [description, setDescription] = useState("");
 
   // Ticket-specific state
   const [ticketPackage, setTicketPackage] = useState<TicketPackage | null>(null);
   const [quantity, setQuantity] = useState(1);
+  const [pendingOrders, setPendingOrders] = useState<PendingOrder[]>([]);
+  const [cancellingOrders, setCancellingOrders] = useState<Set<string>>(new Set());
 
   // Fetch user profile
   const fetchProfile = useCallback(async () => {
@@ -226,7 +252,7 @@ export default function CheckoutPage() {
     try {
       const response = await fetch("https://api.getgeoapi.com/v2/currency/convert?api_key=05585d2dbe81b54873e6a5ec72b0ad7e423bbcc0&from=USD&to=VND&amount=1&format=json");
       const data = await response.json();
-      
+
       if (
         data &&
         data.status === "success" &&
@@ -250,6 +276,13 @@ export default function CheckoutPage() {
       const response = await fetch(
         `https://localhost:7286/api/Booking?customerId=${profile.accountId}&status=Pending`
       );
+      console.log(`customerId=${profile.accountId}&status=Pending`);
+
+      if (response.status === 204) {
+        // No content, skip further processing
+        setPendingBookings([]);
+        return;
+      }
 
       if (response.ok) {
         const data: PendingBooking[] = await response.json();
@@ -271,7 +304,7 @@ export default function CheckoutPage() {
 
   const handleCancelBooking = async (bookingId: string) => {
     setCancellingBookings(prev => new Set([...prev, bookingId]));
-    
+
     try {
       const token = Cookies.get("authToken");
       if (!token) {
@@ -307,7 +340,7 @@ export default function CheckoutPage() {
 
   const fetchService = useCallback(async () => {
     if (mode !== "booking") return;
-    
+
     try {
       const response = await fetch(`https://localhost:7218/api/Service/${serviceId}`);
       if (!response.ok) throw new Error("Failed to fetch services");
@@ -323,7 +356,7 @@ export default function CheckoutPage() {
 
   const fetchLawyer = useCallback(async () => {
     if (mode !== "booking") return;
-    
+
     try {
       const response = await fetch(`https://localhost:7218/api/Lawyer/service/${serviceId}`);
       if (!response.ok) throw new Error("Failed to fetch lawyers");
@@ -377,7 +410,7 @@ export default function CheckoutPage() {
   // Ticket-specific functions
   const fetchTicketPackage = useCallback(async () => {
     if (mode !== "ticket") return;
-    
+
     try {
       const response = await fetch("https://localhost:7103/api/ticket-packages-active");
       if (!response.ok) throw new Error("Failed to fetch ticket packages");
@@ -393,6 +426,70 @@ export default function CheckoutPage() {
     }
   }, [ticketPackageId, mode]);
 
+  const fetchPendingOrders = useCallback(async () => {
+    if (!profile?.accountId || mode !== "ticket") return;
+
+    try {
+      const response = await fetch(`https://localhost:7024/api/orders`);
+
+      if (response.status === 204) {
+        setPendingOrders([]);
+        return;
+      }
+
+      if (response.ok) {
+        const data: PendingOrder[] = await response.json();
+        // Filter for current user and pending status
+        console.log("Fetched pending orders:", data);
+        const filteredOrders = data.filter(
+          order =>
+            order.userId === profile.accountId &&
+            order.status === "Pending"
+        );
+        console.log("Pending orders:", filteredOrders);
+        setPendingOrders(filteredOrders);
+      }
+    } catch (error) {
+      console.error("Failed to fetch pending orders:", error);
+    }
+  }, [profile?.accountId, mode]);
+
+  const handleCancelOrder = async (orderId: string) => {
+    setCancellingOrders(prev => new Set([...prev, orderId]));
+
+    try {
+      const token = Cookies.get("authToken");
+      if (!token) {
+        toast.error("Authentication required");
+        return;
+      }
+
+      const response = await fetch(`https://localhost:7024/api/order/${orderId}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        toast.success("Order cancelled successfully");
+        await fetchPendingOrders();
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to cancel order");
+      }
+    } catch (error) {
+      console.error("Failed to cancel order:", error);
+      toast.error("Failed to cancel order. Please try again.");
+    } finally {
+      setCancellingOrders(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(orderId);
+        return newSet;
+      });
+    }
+  };
+
   const handleQuantityChange = (delta: number) => {
     setQuantity(prev => Math.max(1, prev + delta));
   };
@@ -400,14 +497,27 @@ export default function CheckoutPage() {
   // Handle booking creation
   const handleBooking = async () => {
     if (mode !== "booking") return;
-    
+
     if (!selectedSlots.length) {
       toast.error("Please select at least one time slot");
       return;
     }
 
-    if (!profile || !lawyer || !selectedDate) {
-      toast.error("Missing required information");
+    if (!profile) {
+      toast.error("Missing user profile. Please log in again.");
+      return;
+    }
+    if (!lawyer) {
+      toast.error("Lawyer information is missing or unavailable.");
+      return;
+    }
+    if (!selectedDate) {
+      toast.error("Please select a booking date.");
+      return;
+    }
+
+    if (!description.trim()) {
+      toast.error("Please provide a description of your case");
       return;
     }
 
@@ -422,6 +532,7 @@ export default function CheckoutPage() {
       const bookingData = {
         bookingDate: formatDate(selectedDate),
         price: lawyer.pricePerHour * selectedSlots.length,
+        description: description.trim(),
         customerId: profile.accountId,
         lawyerId: lawyerId,
         serviceId: serviceId,
@@ -473,7 +584,9 @@ export default function CheckoutPage() {
         price: ticketPackage.price * quantity
       };
 
-      const response = await fetch("https://localhost:7024/api/orders/ticket-package", {
+      console.log(orderData);
+
+      const response = await fetch("https://localhost:7024/api/order/ticket-package", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -560,12 +673,16 @@ export default function CheckoutPage() {
   };
 
   // Calculate totals
-  const totalPrice = mode === "booking" 
+  const totalPrice = mode === "booking"
     ? (lawyer ? lawyer.pricePerHour * selectedSlots.length : 0)
     : (ticketPackage ? ticketPackage.price * quantity : 0);
 
-  const currentPendingBooking = mode === "booking" 
+  const currentPendingBooking = mode === "booking"
     ? pendingBookings.find(booking => booking.serviceId === serviceId && booking.lawyerId === lawyerId)
+    : null;
+
+  const currentPendingOrder = mode === "ticket"
+    ? pendingOrders.find(order => order.orderDetails.some(detail => detail.ticketPackageId === ticketPackageId))
     : null;
 
   // Initialize data
@@ -593,16 +710,32 @@ export default function CheckoutPage() {
   useEffect(() => {
     if (mode === "booking" && profile?.accountId) {
       fetchPendingBookings();
-      const interval = setInterval(fetchPendingBookings, 5000);
+      const interval = setInterval(fetchPendingBookings, 20000);
       return () => clearInterval(interval);
     }
   }, [fetchPendingBookings, profile?.accountId, mode]);
 
+  // Ticket-specific effects
+  useEffect(() => {
+    if (mode === "ticket" && ticketPackageId) {
+      fetchTicketPackage();
+    }
+  }, [ticketPackageId, fetchTicketPackage, mode]);
+
+  useEffect(() => {
+    if (mode === "ticket" && profile?.accountId) {
+      fetchPendingOrders();
+      const interval = setInterval(fetchPendingOrders, 20000);
+      return () => clearInterval(interval);
+    }
+  }, [fetchPendingOrders, profile?.accountId, mode]);
+
+  // --- UI ---
   if (loading) {
     return (
       <MaxWidthWrapper>
         <div className="flex items-center justify-center min-h-screen">
-          <Loader2 className="h-8 w-8 animate-spin" />
+          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
         </div>
       </MaxWidthWrapper>
     );
@@ -612,8 +745,8 @@ export default function CheckoutPage() {
     return (
       <MaxWidthWrapper>
         <div className="flex flex-col items-center justify-center min-h-screen space-y-4">
-          <AlertTriangle className="h-12 w-12 text-red-500" />
-          <p className="text-lg font-medium text-red-600">{error}</p>
+          <AlertTriangle className="h-12 w-12 text-destructive" />
+          <p className="text-lg font-semibold text-destructive">{error}</p>
           <Button onClick={() => router.back()} variant="outline">
             <ArrowLeft className="mr-2 h-4 w-4" />
             Go Back
@@ -627,54 +760,53 @@ export default function CheckoutPage() {
     <MaxWidthWrapper>
       <div className="py-8 space-y-8">
         {/* Header */}
-        <div className="flex items-center space-x-4">
+        <div className="flex items-center gap-4 mb-4">
           <Button onClick={() => router.back()} variant="outline" size="sm">
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back
           </Button>
           <div>
-            <h1 className="text-3xl font-bold">
+            <h1 className="text-3xl font-bold text-primary">
               {mode === "booking" ? "Book Appointment" : "Buy Tickets"}
             </h1>
             <p className="text-muted-foreground">
-              {mode === "booking" 
+              {mode === "booking"
                 ? `Schedule your consultation with ${lawyer?.fullName}`
-                : `Purchase ${ticketPackage?.ticketPackageName} tickets`
-              }
+                : `Purchase ${ticketPackage?.ticketPackageName} tickets`}
             </p>
           </div>
         </div>
 
-        {/* Pending Bookings Alert - Only for booking mode */}
+        {/* Pending Bookings Alert */}
         {mode === "booking" && pendingBookings.length > 0 && (
-          <Card className="border-orange-200 bg-orange-50">
+          <Card className="border-orange-300 bg-orange-50">
             <CardHeader>
-              <CardTitle className="flex items-center space-x-2 text-orange-800">
+              <CardTitle className="flex items-center gap-2 text-orange-800">
                 <AlertTriangle className="h-5 w-5" />
                 <span>Pending Bookings ({pendingBookings.length})</span>
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               {pendingBookings.map((booking) => (
-                <div 
-                  key={booking.bookingId} 
+                <div
+                  key={booking.bookingId}
                   className="flex items-center justify-between p-4 bg-white rounded-lg border border-orange-200"
                 >
                   <div className="flex-1">
-                    <div className="flex items-center space-x-4">
+                    <div className="flex items-center gap-4">
                       <div className="flex-1">
                         <h4 className="font-medium text-orange-900">{booking.serviceName}</h4>
                         <p className="text-sm text-orange-700">Lawyer: {booking.lawyerName}</p>
-                        <div className="flex items-center space-x-4 mt-2 text-sm text-orange-600">
-                          <span className="flex items-center space-x-1">
+                        <div className="flex items-center gap-4 mt-2 text-sm text-orange-600">
+                          <span className="flex items-center gap-1">
                             <CalendarIcon className="h-4 w-4" />
                             <span>{booking.bookingDate}</span>
                           </span>
-                          <span className="flex items-center space-x-1">
+                          <span className="flex items-center gap-1">
                             <Clock className="h-4 w-4" />
                             <span>{formatTime(booking.startTime)} - {formatTime(booking.endTime)}</span>
                           </span>
-                          <span className="flex items-center space-x-1">
+                          <span className="flex items-center gap-1">
                             <Landmark className="h-4 w-4" />
                             <span>{formatPrice(booking.price)}</span>
                           </span>
@@ -682,7 +814,7 @@ export default function CheckoutPage() {
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center space-x-2">
+                  <div className="flex items-center gap-2">
                     <Button
                       onClick={() => handleOrder(booking.bookingId, booking.price)}
                       disabled={orderProcessing}
@@ -702,7 +834,6 @@ export default function CheckoutPage() {
                         </>
                       )}
                     </Button>
-                    
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
                         <Button
@@ -757,21 +888,131 @@ export default function CheckoutPage() {
           </Card>
         )}
 
+        {/* Pending Orders Alert */}
+        {mode === "ticket" && pendingOrders.length > 0 && (
+          <Card className="border-orange-300 bg-orange-50">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-orange-800">
+                <AlertTriangle className="h-5 w-5" />
+                <span>Pending Orders ({pendingOrders.length})</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {pendingOrders.map((order) => (
+                <div
+                  key={order.orderId}
+                  className="flex items-center justify-between p-4 bg-white rounded-lg border border-orange-200"
+                >
+                  <div className="flex-1">
+                    <div className="flex items-center gap-4">
+                      <div className="flex-1">
+                        <h4 className="font-medium text-orange-900">
+                          Order #{order.orderId.slice(-8)}
+                        </h4>
+                        <p className="text-sm text-orange-700">
+                          {order.orderDetails.reduce((sum, detail) => sum + detail.quantity, 0)} package(s)
+                        </p>
+                        <div className="flex items-center gap-4 mt-2 text-sm text-orange-600">
+                          <span className="flex items-center gap-1">
+                            <Package className="h-4 w-4" />
+                            <span>
+                              {order.orderDetails.reduce((sum, detail) => sum + detail.quantity, 0)} packages
+                            </span>
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <Landmark className="h-4 w-4" />
+                            <span>{formatPrice(order.totalPrice)}</span>
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      onClick={() => handleOrder(null, null, order.orderId)}
+                      disabled={orderProcessing}
+                      variant="outline"
+                      size="sm"
+                      className="border-orange-300 text-orange-700 hover:bg-orange-100"
+                    >
+                      {orderProcessing ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Processing...
+                        </>
+                      ) : (
+                        <>
+                          <CreditCard className="mr-2 h-4 w-4" />
+                          Pay Now
+                        </>
+                      )}
+                    </Button>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="border-red-300 text-red-700 hover:bg-red-50"
+                          disabled={cancellingOrders.has(order.orderId)}
+                        >
+                          {cancellingOrders.has(order.orderId) ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Cancelling...
+                            </>
+                          ) : (
+                            <>
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Cancel
+                            </>
+                          )}
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Are you sure you want to cancel this order?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            This action cannot be undone. This will cancel your order:
+                            <br />
+                            <strong>Order #{order.orderId.slice(-8)}</strong>
+                            <br />
+                            Packages: <strong>{order.orderDetails.reduce((sum, detail) => sum + detail.quantity, 0)}</strong>
+                            <br />
+                            Amount: <strong>{formatPrice(order.totalPrice)}</strong>
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Keep Order</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={() => handleCancelOrder(order.orderId)}
+                            className="bg-red-600 hover:bg-red-700"
+                          >
+                            Yes, Cancel Order
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
+
         <div className="grid lg:grid-cols-3 gap-8">
-          {/* Left Column - Details */}
+          {/* Left Column */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Service & Lawyer Info OR Ticket Package Info */}
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
+                <CardTitle className="flex items-center gap-2">
                   {mode === "booking" ? (
                     <>
-                      <User className="h-5 w-5" />
+                      <User className="h-5 w-5 text-primary" />
                       <span>Booking Details</span>
                     </>
                   ) : (
                     <>
-                      <Ticket className="h-5 w-5" />
+                      <Ticket className="h-5 w-5 text-primary" />
                       <span>Ticket Package Details</span>
                     </>
                   )}
@@ -780,7 +1021,7 @@ export default function CheckoutPage() {
               <CardContent className="space-y-4">
                 {mode === "booking" ? (
                   <>
-                    <div className="flex items-center space-x-4">
+                    <div className="flex items-center gap-4">
                       <Avatar className="h-16 w-16">
                         <AvatarImage src={lawyer?.image} alt={lawyer?.fullName} />
                         <AvatarFallback className="text-lg">
@@ -788,18 +1029,18 @@ export default function CheckoutPage() {
                         </AvatarFallback>
                       </Avatar>
                       <div className="flex-1">
-                        <h3 className="text-xl font-semibold">{lawyer?.fullName}</h3>
+                        <h3 className="text-xl font-semibold text-primary">{lawyer?.fullName}</h3>
                         <p className="text-muted-foreground">{lawyer?.email}</p>
                         <p className="text-muted-foreground">{lawyer?.phone}</p>
-                        <div className="flex items-center space-x-2 mt-2">
-                          <span className="font-medium">
+                        <div className="flex items-center gap-2 mt-2">
+                          <span className="font-medium text-green-700">
                             {lawyer ? formatPrice(lawyer.pricePerHour) : ""}/hour
                           </span>
                         </div>
                       </div>
                     </div>
                     <div className="border-t pt-4">
-                      <h4 className="font-medium">Service</h4>
+                      <h4 className="font-medium text-primary">Service</h4>
                       <p className="text-muted-foreground">{service?.serviceName}</p>
                       <p className="text-sm text-muted-foreground mt-1">
                         {service?.serviceDescription}
@@ -808,17 +1049,17 @@ export default function CheckoutPage() {
                   </>
                 ) : (
                   <>
-                    <div className="flex items-center space-x-4">
+                    <div className="flex items-center gap-4">
                       <div className="h-16 w-16 bg-blue-100 rounded-lg flex items-center justify-center">
                         <Package className="h-8 w-8 text-blue-600" />
                       </div>
                       <div className="flex-1">
-                        <h3 className="text-xl font-semibold">{ticketPackage?.ticketPackageName}</h3>
+                        <h3 className="text-xl font-semibold text-primary">{ticketPackage?.ticketPackageName}</h3>
                         <p className="text-muted-foreground">
                           {ticketPackage?.requestAmount.toLocaleString()} Tickets per package
                         </p>
-                        <div className="flex items-center space-x-4 mt-2">
-                          <span className="font-medium">
+                        <div className="flex items-center gap-4 mt-2">
+                          <span className="font-medium text-green-700">
                             {ticketPackage ? formatUSDPrice(ticketPackage.price, usdToVndRate) : ""} per package
                           </span>
                           <span className="text-sm text-muted-foreground">
@@ -828,8 +1069,8 @@ export default function CheckoutPage() {
                       </div>
                     </div>
                     <div className="border-t pt-4">
-                      <h4 className="font-medium mb-3">Quantity</h4>
-                      <div className="flex items-center space-x-4">
+                      <h4 className="font-medium mb-3 text-primary">Quantity</h4>
+                      <div className="flex items-center gap-4">
                         <Button
                           variant="outline"
                           size="sm"
@@ -853,89 +1094,118 @@ export default function CheckoutPage() {
               </CardContent>
             </Card>
 
-            {/* Date Selection & Time Slots side by side */}
+            {/* Date & Slots */}
             {mode === "booking" && (
-              <div className="flex flex-col md:flex-row gap-6">
-                {/* Date Selection */}
-                <Card className="flex-1">
-                  <CardHeader>
-                    <CardTitle className="flex items-center space-x-2">
-                      <CalendarIcon className="h-5 w-5" />
-                      <span>Select Date</span>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <Calendar
-                      mode="single"
-                      selected={selectedDate}
-                      onSelect={setSelectedDate}
-                      disabled={[
-                        {
-                          before: (() => {
-                            const date = new Date();
-                            date.setDate(date.getDate() + 1);
-                            return date;
-                          })()
-                        },
-                        {
-                          after: (() => {
-                            const date = new Date();
-                            date.setMonth(date.getMonth() + 3);
-                            return date;
-                          })()
-                        }
-                      ]}
-                      className="rounded-md border w-full h-auto"
-                    />
-                  </CardContent>
-                </Card>
-
-                {/* Time Slots */}
-                <Card className="flex-1">
-                  <CardHeader>
-                    <CardTitle className="flex items-center space-x-2">
-                      <Clock className="h-5 w-5" />
-                      <span>Available Time Slots</span>
-                      {selectedDate && (
-                        <span className="text-sm font-normal text-muted-foreground">
-                          for {selectedDate.toLocaleDateString()}
-                        </span>
+              <>
+                <div className="flex flex-col md:flex-row gap-6">
+                  <Card className="flex-1">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <CalendarIcon className="h-5 w-5 text-primary" />
+                        <span>Select Date</span>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <Calendar
+                        mode="single"
+                        selected={selectedDate}
+                        onSelect={setSelectedDate}
+                        disabled={[
+                          {
+                            before: (() => {
+                              const date = new Date();
+                              date.setDate(date.getDate() + 1);
+                              return date;
+                            })()
+                          },
+                          {
+                            after: (() => {
+                              const date = new Date();
+                              date.setMonth(date.getMonth() + 3);
+                              return date;
+                            })()
+                          }
+                        ]}
+                        className="rounded-md border w-full h-auto"
+                      />
+                    </CardContent>
+                  </Card>
+                  <Card className="flex-1">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Clock className="h-5 w-5 text-primary" />
+                        <span>Available Time Slots</span>
+                        {selectedDate && (
+                          <span className="text-sm font-normal text-muted-foreground">
+                            for {selectedDate.toLocaleDateString()}
+                          </span>
+                        )}
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {slotsLoading ? (
+                        <div className="flex items-center justify-center py-8">
+                          <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+                          <span className="ml-2 text-blue-600">Loading available slots...</span>
+                        </div>
+                      ) : availableSlots.length === 0 ? (
+                        <div className="text-center py-8 text-muted-foreground">
+                          <XCircle className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                          <p>No available slots for this date</p>
+                          <p className="text-sm">Please select another date</p>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-2 gap-3">
+                          {availableSlots.map((slot) => (
+                            <Button
+                              key={slot.slotId}
+                              variant={selectedSlots.includes(slot.slotId) ? "default" : "outline"}
+                              onClick={() => handleSlotSelection(slot.slotId)}
+                              className="justify-center"
+                            >
+                              {formatTime(slot.slotStartTime)} - {formatTime(slot.slotEndTime)}
+                            </Button>
+                          ))}
+                        </div>
                       )}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {slotsLoading ? (
-                      <div className="flex items-center justify-center py-8">
-                        <Loader2 className="h-6 w-6 animate-spin" />
-                        <span className="ml-2">Loading available slots...</span>
+                    </CardContent>
+                  </Card>
+
+                </div>
+                <div>
+                  <Card className="flex-1">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <MessageCircleMore className="h-5 w-5 text-primary" />
+                        <span>Case Description</span>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-3">
+                        <Label htmlFor="description" className="text-sm font-medium">
+                          Please describe your case or legal matter
+                        </Label>
+                        <Textarea
+                          id="description"
+                          placeholder="Please provide details about your legal matter, any specific questions you have, or what you'd like to discuss during the consultation. This helps the lawyer prepare for your session."
+                          value={description}
+                          onChange={(e) => setDescription(e.target.value)}
+                          className="min-h-[120px] resize-none"
+                          maxLength={1000}
+                        />
+                        <div className="flex justify-between items-center text-sm text-muted-foreground">
+                          <span>This information will be shared with your lawyer</span>
+                          <span>{description.length}/1000</span>
+                        </div>
                       </div>
-                    ) : availableSlots.length === 0 ? (
-                      <div className="text-center py-8 text-muted-foreground">
-                        <XCircle className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                        <p>No available slots for this date</p>
-                        <p className="text-sm">Please select another date</p>
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                        {availableSlots.map((slot) => (
-                          <Button
-                            key={slot.slotId}
-                            variant={selectedSlots.includes(slot.slotId) ? "default" : "outline"}
-                            onClick={() => handleSlotSelection(slot.slotId)}
-                            className="justify-center"
-                          >
-                            {formatTime(slot.slotStartTime)} - {formatTime(slot.slotEndTime)}
-                          </Button>
-                        ))}
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </>
             )}
           </div>
 
-          {/* Right Column - Summary */}
+          {/* Right Column - Summary & Action */}
           <div className="space-y-6">
             <Card>
               <CardHeader>
@@ -995,11 +1265,11 @@ export default function CheckoutPage() {
                           <div className="flex justify-between text-lg font-semibold">
                             <span>Total</span>
                             <div className="text-right">
-                          <div>{formatPrice(totalPrice)}</div>
-                          <div className="text-sm font-normal text-muted-foreground">
-                            {formatUSDPrice(totalPrice, usdToVndRate)}
-                          </div>
-                        </div>
+                              <div>{formatPrice(totalPrice)}</div>
+                              <div className="text-sm font-normal text-muted-foreground">
+                                {formatUSDPrice(totalPrice, usdToVndRate)}
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </>
@@ -1015,7 +1285,6 @@ export default function CheckoutPage() {
                 <div className="space-y-4">
                   {mode === "booking" ? (
                     <>
-                      {/* Show existing pending booking payment button if exists */}
                       {currentPendingBooking ? (
                         <div className="space-y-3">
                           <div className="p-3 bg-orange-50 border border-orange-200 rounded-lg">
@@ -1029,7 +1298,7 @@ export default function CheckoutPage() {
                           <Button
                             onClick={() => handleOrder(currentPendingBooking.bookingId, currentPendingBooking.price)}
                             disabled={orderProcessing}
-                            className="w-full"
+                            className="w-full bg-orange-600 hover:bg-orange-700 text-white"
                             size="lg"
                           >
                             {orderProcessing ? (
@@ -1048,8 +1317,8 @@ export default function CheckoutPage() {
                       ) : (
                         <Button
                           onClick={handleBooking}
-                          disabled={booking || selectedSlots.length === 0 || !selectedDate}
-                          className="w-full"
+                          disabled={booking || selectedSlots.length === 0 || !selectedDate || !description.trim()}
+                          className="w-full bg-blue-600 hover:bg-blue-700 text-white"
                           size="lg"
                         >
                           {booking ? (
@@ -1067,28 +1336,61 @@ export default function CheckoutPage() {
                       )}
                     </>
                   ) : (
-                    <Button
-                      onClick={handleTicketOrder}
-                      disabled={orderProcessing || !ticketPackage}
-                      className="w-full"
-                      size="lg"
-                    >
-                      {orderProcessing ? (
-                        <>
-                          <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                          Processing Order...
-                        </>
+                    <>
+                      {currentPendingOrder ? (
+                        <div className="space-y-3">
+                          <div className="p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                            <p className="text-sm text-orange-800 font-medium">
+                              You have a pending order for this ticket package
+                            </p>
+                            <p className="text-xs text-orange-600 mt-1">
+                              {currentPendingOrder.orderDetails.reduce((total, detail) => total + detail.quantity, 0)} packages • {formatPrice(currentPendingOrder.totalPrice)}
+                            </p>
+                          </div>
+                          <Button
+                            onClick={() => handleOrder(null, null, currentPendingOrder.orderId)}
+                            disabled={orderProcessing}
+                            className="w-full bg-orange-600 hover:bg-orange-700 text-white"
+                            size="lg"
+                          >
+                            {orderProcessing ? (
+                              <>
+                                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                                Processing Payment...
+                              </>
+                            ) : (
+                              <>
+                                <CreditCard className="mr-2 h-5 w-5" />
+                                Pay for Existing Order ({formatPrice(currentPendingOrder.totalPrice)})
+                              </>
+                            )}
+                          </Button>
+                        </div>
                       ) : (
-                        <>
-                          <Package className="mr-2 h-5 w-5" />
-                          Place Order & Pay ({formatUSDPrice(totalPrice, usdToVndRate)})
-                        </>
+                        <Button
+                          onClick={handleTicketOrder}
+                          disabled={orderProcessing || !ticketPackage}
+                          className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                          size="lg"
+                        >
+                          {orderProcessing ? (
+                            <>
+                              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                              Processing Order...
+                            </>
+                          ) : (
+                            <>
+                              <Package className="mr-2 h-5 w-5" />
+                              Place Order & Pay ({formatUSDPrice(totalPrice, usdToVndRate)})
+                            </>
+                          )}
+                        </Button>
                       )}
-                    </Button>
+                    </>
                   )}
-                  
+
                   <p className="text-xs text-muted-foreground text-center">
-                    {mode === "booking" 
+                    {mode === "booking"
                       ? "You will be redirected to payment after booking confirmation"
                       : "You will be redirected to payment after order confirmation"
                     }

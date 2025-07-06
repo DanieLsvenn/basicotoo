@@ -7,9 +7,9 @@ import Cookies from "js-cookie";
 
 // Define user roles
 export enum UserRole {
-  USER = "user",
-  LAWYER = "lawyer",
-  STAFF = "staff",
+  USER = "USER",
+  LAWYER = "LAWYER",
+  STAFF = "STAFF",
 }
 
 interface BaseUser {
@@ -49,7 +49,7 @@ type User = RegularUser | LawyerUser | StaffUser;
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
-  login: (username: string, password: string, role?: UserRole) => Promise<void>;
+  login: (username: string, password: string) => Promise<void>;
   loginWithGoogle: () => Promise<void>;
   register: (data: RegisterData) => Promise<void>;
   registerLawyer: (data: LawyerRegisterData) => Promise<void>;
@@ -158,13 +158,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const token = Cookies.get("authToken");
       const userRole = Cookies.get("userRole") as UserRole;
 
-      if (!token || !userRole) {
+      if (!token) {
         setIsLoading(false);
         return;
       }
 
       try {
-        await fetchUserProfile(token, userRole);
+        if (userRole) {
+          // If we have a stored role, fetch profile with that role
+          await fetchUserProfile(token, userRole);
+        } else {
+          // If no stored role, try to determine from the profile endpoint
+          await determineUserRoleAndFetchProfile(token);
+        }
       } catch (err) {
         console.error("Failed to fetch user profile", err);
         logout();
@@ -174,18 +180,55 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(false);
   };
 
+  const determineUserRoleAndFetchProfile = async (token: string) => {
+    // First try the main account profile endpoint to get user info
+    const response = await fetch(`${API_BASE_AUTH}/profile`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error("Unauthorized");
+    }
+
+    const userData = await response.json();
+    
+    // Determine role from the userData (adjust these field names based on your backend response)
+    let userRole: UserRole;
+    if (userData.role) {
+      userRole = userData.role;
+    } else if (userData.userRole) {
+      userRole = userData.userRole;
+    } else if (userData.accountType) {
+      userRole = userData.accountType;
+    } else {
+      // Default fallback - you might need to adjust this logic
+      userRole = UserRole.USER;
+    }
+
+    // Store the determined role
+    Cookies.set("userRole", userRole, { expires: 7 });
+
+    // Now fetch the full profile based on the determined role
+    await fetchUserProfile(token, userRole);
+  };
+
   const fetchUserProfile = async (token: string, role: UserRole) => {
     let apiUrl = "";
+    let userData: any;
 
+    // Remove if unified profile for all roles instead of separate endpoints
     switch (role) {
       case UserRole.USER:
         apiUrl = `${API_BASE_AUTH}/profile`;
         break;
       case UserRole.LAWYER:
-        apiUrl = `${API_BASE_LAWYER}/profile`; // Assuming this endpoint exists
+        apiUrl = `${API_BASE_LAWYER}/profile`;
         break;
       case UserRole.STAFF:
-        apiUrl = `${API_BASE_STAFF}/profile`; // Assuming this endpoint exists
+        apiUrl = `${API_BASE_STAFF}/profile`;
         break;
       default:
         throw new Error("Invalid user role");
@@ -199,10 +242,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     if (!response.ok) {
-      throw new Error("Unauthorized");
+      // If specific role endpoint fails, fallback to main account profile
+      if (role !== UserRole.USER) {
+        const fallbackResponse = await fetch(`${API_BASE_AUTH}/profile`, {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        
+        if (fallbackResponse.ok) {
+          userData = await fallbackResponse.json();
+        } else {
+          throw new Error("Unauthorized");
+        }
+      } else {
+        throw new Error("Unauthorized");
+      }
+    } else {
+      userData = await response.json();
     }
 
-    const userData = await response.json();
     let mappedUser: User;
 
     switch (role) {
@@ -258,22 +318,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const refreshUser = checkAuth;
 
-  const login = async (
-    username: string,
-    password: string,
-    role: UserRole = UserRole.USER
-  ) => {
-    // Use the same login endpoint for all roles
-    const apiUrl = `${API_BASE_AUTH}/login`;
-    const requestBody = { username, password };
-
+  const login = async (username: string, password: string) => {
     try {
-      const response = await fetch(apiUrl, {
+      // Use the unified login endpoint for all user types
+      const response = await fetch(`${API_BASE_AUTH}/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(requestBody),
+        body: JSON.stringify({ username, password }),
       });
 
       if (!response.ok) {
@@ -284,45 +337,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const result = await response.json();
       const token = result.token;
 
-      // Get user profile to determine actual role
-      const userResponse = await fetch(`${API_BASE_AUTH}/profile`, {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!userResponse.ok) {
-        throw new Error("Failed to fetch user profile");
-      }
-
-      const userData = await userResponse.json();
-      const actualUserRole =
-        userData.role || userData.userRole || UserRole.USER;
-
-      // Validate that the selected role matches the user's actual role
-      if (role !== actualUserRole) {
-        throw new Error(
-          `You don't have permission to login as ${role}. Your account role is ${actualUserRole}.`
-        );
-      }
-
       Cookies.set("authToken", token, { expires: 7 });
-      Cookies.set("userRole", actualUserRole, { expires: 7 });
 
-      await fetchUserProfile(token, actualUserRole);
+      // Determine user role and fetch profile
+      await determineUserRoleAndFetchProfile(token);
 
-      // Redirect based on actual role
-      switch (actualUserRole) {
+      // Get the user role that was determined
+      const userRole = Cookies.get("userRole") as UserRole;
+
+      // Redirect based on user role
+      switch (userRole) {
         case UserRole.USER:
-          router.push("/dashboard");
+          router.push("/");
           break;
         case UserRole.LAWYER:
-          router.push("/lawyer-dashboard");
+          router.push("/dashboard/lawyer-dashboard");
           break;
         case UserRole.STAFF:
-          router.push("/staff-dashboard");
+          router.push("/dashboard/staff-dashboard");
           break;
+        default:
+          router.push("/");
       }
     } catch (error) {
       throw error;
@@ -371,6 +406,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // Remove if lawyer and staff can only be registered through admin
+  // If they can be registered through the frontend, keep these functions
   const registerLawyer = async (registerData: LawyerRegisterData) => {
     try {
       const newLawyer = {
@@ -447,11 +484,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         case UserRole.USER:
           apiUrl = `${API_BASE_AUTH}/profile/update`;
           break;
+        // Remove if lawyer and staff can only be updated through admin
         case UserRole.LAWYER:
-          apiUrl = `${API_BASE_LAWYER}/profile/update`; // Assuming this endpoint exists
+          apiUrl = `${API_BASE_LAWYER}/profile/update`;
           break;
         case UserRole.STAFF:
-          apiUrl = `${API_BASE_STAFF}/profile/update`; // Assuming this endpoint exists
+          apiUrl = `${API_BASE_STAFF}/profile/update`;
           break;
         default:
           throw new Error("Invalid user role");

@@ -48,6 +48,11 @@ const navItems = [
     href: "/dashboard/staff-dashboard",
     icon: Settings,
   },
+  {
+    title: "Schedule",
+    href: "/dashboard/lawyer-dashboard",
+    icon: Settings,
+  },
 ];
 
 export function Sidebar() {

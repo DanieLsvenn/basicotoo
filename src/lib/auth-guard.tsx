@@ -14,7 +14,7 @@ interface AuthGuardProps {
 export function AuthGuard({
   children,
   fallback,
-  allowedRoles = [UserRole.USER, UserRole.LAWYER, UserRole.STAFF],
+  allowedRoles = [UserRole.USER, UserRole.LAWYER, UserRole.STAFF, UserRole.ADMIN],
   redirectTo,
 }: AuthGuardProps) {
   const { user, isLoading } = useAuth();
@@ -22,6 +22,7 @@ export function AuthGuard({
 
   useEffect(() => {
     if (!isLoading) {
+      console.log(user);
       if (!user) {
         router.push("/sign-in");
         return;
@@ -41,11 +42,11 @@ export function AuthGuard({
   const getDefaultRedirectForRole = (role: UserRole): string => {
     switch (role) {
       case UserRole.USER:
-        return "/dashboard";
+        return "/";
       case UserRole.LAWYER:
-        return "/lawyer-dashboard";
+        return "/dashboard/lawyer-dashboard";
       case UserRole.STAFF:
-        return "/staff-dashboard";
+        return "/dashboard/staff-dashboard";
       default:
         return "/";
     }
@@ -79,7 +80,7 @@ export function UserOnlyGuard({
   fallback?: ReactNode;
 }) {
   return (
-    <AuthGuard allowedRoles={[UserRole.USER]} fallback={fallback}>
+    <AuthGuard allowedRoles={[UserRole.USER, UserRole.ADMIN]} fallback={fallback}>
       {children}
     </AuthGuard>
   );
@@ -93,7 +94,7 @@ export function LawyerOnlyGuard({
   fallback?: ReactNode;
 }) {
   return (
-    <AuthGuard allowedRoles={[UserRole.LAWYER]} fallback={fallback}>
+    <AuthGuard allowedRoles={[UserRole.LAWYER, UserRole.ADMIN]} fallback={fallback}>
       {children}
     </AuthGuard>
   );
@@ -107,13 +108,13 @@ export function StaffOnlyGuard({
   fallback?: ReactNode;
 }) {
   return (
-    <AuthGuard allowedRoles={[UserRole.STAFF]} fallback={fallback}>
+    <AuthGuard allowedRoles={[UserRole.STAFF, UserRole.ADMIN]} fallback={fallback}>
       {children}
     </AuthGuard>
   );
 }
 
-export function AdminGuard({
+export function AdminOnlyGuard({
   children,
   fallback,
 }: {
@@ -121,10 +122,35 @@ export function AdminGuard({
   fallback?: ReactNode;
 }) {
   return (
-    <AuthGuard
-      allowedRoles={[UserRole.STAFF, UserRole.LAWYER]}
-      fallback={fallback}
-    >
+    <AuthGuard allowedRoles={[UserRole.ADMIN]} fallback={fallback}>
+      {children}
+    </AuthGuard>
+  );
+}
+
+export function StaffOrLawyerGuard({
+  children,
+  fallback,
+}: {
+  children: ReactNode;
+  fallback?: ReactNode;
+}) {
+  return (
+    <AuthGuard allowedRoles={[UserRole.LAWYER, UserRole.STAFF, UserRole.ADMIN]} fallback={fallback}>
+      {children}
+    </AuthGuard>
+  );
+}
+
+export function AuthenticatedGuard({
+  children,
+  fallback,
+}: {
+  children: ReactNode;
+  fallback?: ReactNode;
+}) {
+  return (
+    <AuthGuard allowedRoles={[UserRole.USER, UserRole.LAWYER, UserRole.STAFF, UserRole.ADMIN]} fallback={fallback}>
       {children}
     </AuthGuard>
   );

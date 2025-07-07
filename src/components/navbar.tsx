@@ -119,15 +119,6 @@ export const Navbar = () => {
           <div className="h-full flex items-center space-x-4 ml-2">
             {isLoggedIn ? (
               <>
-                <Link
-                  href="/dashboard"
-                  className={buttonVariants({
-                    size: "sm",
-                    className: "flex items-center gap-1",
-                  })}
-                >
-                  Dashboard <ArrowRight className="ml-1.5 size-4" />
-                </Link>
 
                 {/* User Menu */}
                 <div className="relative">

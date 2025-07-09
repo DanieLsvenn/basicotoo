@@ -33,6 +33,13 @@ import {
 import Cookies from "js-cookie";
 import { PurchasedFormsTab } from "@/components/PurchasedFormsTab";
 import { SendTicketForm } from "@/components/SendTicketForm";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 
 interface UserProfile {
   accountId: string;
@@ -77,6 +84,17 @@ export default function ProfilePage() {
     fullName: "",
     gender: 0,
   });
+  const [bookings, setBookings] = useState<any[]>([]);
+  const [isLoadingBookings, setIsLoadingBookings] = useState(false);
+  const [completedBookings, setCompletedBookings] = useState<any[]>([]);
+  const [isLoadingCompletedBookings, setIsLoadingCompletedBookings] =
+    useState(false);
+  const [feedbackDialogOpen, setFeedbackDialogOpen] = useState(false);
+  const [feedbackBooking, setFeedbackBooking] = useState<any>(null);
+  const [feedbackContent, setFeedbackContent] = useState("");
+  const [feedbackRating, setFeedbackRating] = useState(5);
+  const [feedbackId, setFeedbackId] = useState<string | null>(null);
+  const [submittingFeedback, setSubmittingFeedback] = useState(false);
 
   useEffect(() => {
     fetchProfile();
@@ -339,6 +357,147 @@ export default function ProfilePage() {
     fetchTickets();
   };
 
+  const fetchBookings = async () => {
+    if (!profile?.accountId) return;
+    setIsLoadingBookings(true);
+    try {
+      const token = Cookies.get("authToken");
+      const response = await fetch(
+        `https://localhost:7286/api/Booking?customerId=${profile.accountId}&status=Paid`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      if (response.status === 204) {
+        setBookings([]);
+      } else if (response.ok) {
+        const data = await response.json();
+        setBookings(data);
+      } else {
+        throw new Error("Failed to fetch bookings");
+      }
+    } catch (error) {
+      console.error("Failed to fetch bookings:", error);
+      toast.error("Failed to load bookings", {
+        description: "Please try again later.",
+      });
+    } finally {
+      setIsLoadingBookings(false);
+    }
+  };
+
+  const fetchCompletedBookings = async () => {
+    if (!profile?.accountId) return;
+    setIsLoadingCompletedBookings(true);
+    try {
+      const token = Cookies.get("authToken");
+      const response = await fetch(
+        `https://localhost:7286/api/Booking?customerId=${profile.accountId}&status=Completed`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      if (response.status === 204) {
+        setCompletedBookings([]);
+      } else if (response.ok) {
+        const data = await response.json();
+        setCompletedBookings(data);
+      } else {
+        throw new Error("Failed to fetch completed bookings");
+      }
+    } catch (error) {
+      toast.error("Failed to load booking history");
+    } finally {
+      setIsLoadingCompletedBookings(false);
+    }
+  };
+
+  // Fetch bookings when the tab is first shown:
+  useEffect(() => {
+    if (profile?.accountId) fetchBookings();
+  }, [profile?.accountId]);
+
+  // Fetch completed bookings when the tab is first shown:
+  useEffect(() => {
+    if (profile?.accountId) fetchCompletedBookings();
+  }, [profile?.accountId]);
+
+  // Fetch feedback for a booking
+  const fetchFeedbackForBooking = async (bookingId: string) => {
+    try {
+      const res = await fetch(
+        `https://localhost:7286/api/feedback/booking/${bookingId}`
+      );
+      if (res.ok) {
+        const data = await res.json();
+        setFeedbackContent(data.feedbackContent || "");
+        setFeedbackRating(data.rating || 5);
+        setFeedbackId(data.feedbackId);
+      } else {
+        setFeedbackContent("");
+        setFeedbackRating(5);
+        setFeedbackId(null);
+      }
+    } catch {
+      setFeedbackContent("");
+      setFeedbackRating(5);
+      setFeedbackId(null);
+    }
+  };
+
+  // Open feedback dialog for a booking
+  const handleOpenFeedback = async (booking: any) => {
+    setFeedbackBooking(booking);
+    await fetchFeedbackForBooking(booking.bookingId);
+    setFeedbackDialogOpen(true);
+  };
+
+  // Submit feedback (create or update)
+  const handleSubmitFeedback = async () => {
+    if (!feedbackBooking) return;
+    setSubmittingFeedback(true);
+    try {
+      const token = Cookies.get("authToken");
+      const url = feedbackId
+        ? `https://localhost:7286/api/feedback/${feedbackId}`
+        : "https://localhost:7286/api/feedback";
+      const method = feedbackId ? "PUT" : "POST";
+      const body = feedbackId
+        ? JSON.stringify({ feedbackContent, rating: feedbackRating })
+        : JSON.stringify({
+            bookingId: feedbackBooking.bookingId,
+            customerId: profile?.accountId,
+            feedbackContent,
+            rating: feedbackRating,
+          });
+
+      const res = await fetch(url, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body,
+      });
+
+      if (res.ok) {
+        toast.success("Feedback submitted!");
+        setFeedbackDialogOpen(false);
+        // Optionally refresh bookings or feedback state here
+      } else {
+        throw new Error("Failed to submit feedback");
+      }
+    } catch (error) {
+      toast.error("Failed to submit feedback");
+    } finally {
+      setSubmittingFeedback(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="container mx-auto py-8">
@@ -363,6 +522,15 @@ export default function ProfilePage() {
     );
   }
 
+  // Helper to format price as currency
+  function formatPrice(price: number) {
+    return price?.toLocaleString("en-US", {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: 2,
+    });
+  }
+
   return (
     <div className="container mx-auto py-8 px-4">
       <div className="max-w-4xl mx-auto space-y-8">
@@ -385,7 +553,7 @@ export default function ProfilePage() {
             <TabsTrigger value="personal">Personal Info</TabsTrigger>
             <TabsTrigger value="forms">My Forms</TabsTrigger>
             <TabsTrigger value="tickets">Support</TabsTrigger>
-            <TabsTrigger value="settings">Settings</TabsTrigger>
+            <TabsTrigger value="bookings">My Bookings</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="space-y-6">
@@ -812,6 +980,175 @@ export default function ProfilePage() {
                 </CardContent>
               </Card>
             </div>
+          </TabsContent>
+
+          <TabsContent value="bookings" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>My Booked Meetings</CardTitle>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={fetchBookings}
+                  disabled={isLoadingBookings}
+                  className="ml-2"
+                >
+                  {isLoadingBookings ? (
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2"></div>
+                  ) : (
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                  )}
+                  Refresh
+                </Button>
+              </CardHeader>
+              <CardContent>
+                {isLoadingBookings ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                  </div>
+                ) : bookings.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                    <p className="text-muted-foreground">No bookings found</p>
+                    <p className="text-sm text-muted-foreground">
+                      Your booked lawyer meetings will appear here
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-4 max-h-96 overflow-y-auto">
+                    {bookings.map((booking) => (
+                      <div
+                        key={booking.bookingId}
+                        className="border rounded-lg p-4 space-y-3"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="font-medium">
+                              {booking.lawyerName}
+                            </div>
+                            <div className="text-sm text-muted-foreground">
+                              {booking.bookingDate} {booking.startTime} -{" "}
+                              {booking.endTime}
+                            </div>
+                          </div>
+                          {/* Removed Leave Feedback button here */}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Feedback Dialog */}
+            <Dialog
+              open={feedbackDialogOpen}
+              onOpenChange={setFeedbackDialogOpen}
+            >
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Leave Feedback</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <Textarea
+                    value={feedbackContent}
+                    onChange={(e) => setFeedbackContent(e.target.value)}
+                    placeholder="Share your experience..."
+                    rows={4}
+                  />
+                  <div>
+                    <Label>Rating</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={5}
+                      value={feedbackRating}
+                      onChange={(e) =>
+                        setFeedbackRating(Number(e.target.value))
+                      }
+                    />
+                  </div>
+                  <Button
+                    onClick={handleSubmitFeedback}
+                    disabled={submittingFeedback}
+                    className="w-full"
+                  >
+                    {submittingFeedback
+                      ? "Submitting..."
+                      : feedbackId
+                      ? "Update Feedback"
+                      : "Submit Feedback"}
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </TabsContent>
+
+          <TabsContent value="bookings" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Booking History</CardTitle>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={fetchCompletedBookings}
+                  disabled={isLoadingCompletedBookings}
+                  className="ml-2"
+                >
+                  {isLoadingCompletedBookings ? (
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2"></div>
+                  ) : (
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                  )}
+                  Refresh
+                </Button>
+              </CardHeader>
+              <CardContent>
+                {isLoadingCompletedBookings ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                  </div>
+                ) : completedBookings.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                    <p className="text-muted-foreground">
+                      No completed bookings found
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Your completed lawyer meetings will appear here
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-4 max-h-96 overflow-y-auto">
+                    {completedBookings.map((booking) => (
+                      <div
+                        key={booking.bookingId}
+                        className="border rounded-lg p-4 space-y-3"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="font-medium">
+                              {booking.lawyerName}
+                            </div>
+                            <div className="text-sm text-muted-foreground">
+                              {booking.bookingDate} {booking.startTime} -{" "}
+                              {booking.endTime}
+                            </div>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleOpenFeedback(booking)}
+                          >
+                            Leave Feedback
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
       </div>

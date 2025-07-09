@@ -65,6 +65,18 @@ const allNavItems = [
     icon: Settings,
     roles: [UserRole.LAWYER, UserRole.ADMIN],
   },
+  {
+    title: "Check Bookings",
+    href: "/dashboard/check-bookings",
+    icon: Settings,
+    roles: [UserRole.STAFF, UserRole.ADMIN],
+  },
+  {
+    title: "View Feedbacks",
+    href: "/dashboard/view-feedbacks",
+    icon: Settings,
+    roles: [UserRole.ADMIN],
+  },
 ];
 
 export function Sidebar() {

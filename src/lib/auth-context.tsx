@@ -513,8 +513,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     Cookies.remove("userRole");
     Cookies.remove("ticket");
     setUser(null);
-
-    router.push("/sign-in");
   };
 
   const requestPasswordReset = async (email: string) => {

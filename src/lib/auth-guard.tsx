@@ -8,36 +8,44 @@ interface AuthGuardProps {
   children: ReactNode;
   fallback?: ReactNode;
   allowedRoles?: UserRole[];
+  blockedRoles?: UserRole[];
   redirectTo?: string;
+  allowNoUser?: boolean; // <-- Add this prop
 }
 
 export function AuthGuard({
   children,
   fallback,
   allowedRoles = [UserRole.USER, UserRole.LAWYER, UserRole.STAFF, UserRole.ADMIN],
+  blockedRoles = [],
   redirectTo,
+  allowNoUser = false, // <-- Default to false for backward compatibility
 }: AuthGuardProps) {
   const { user, isLoading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
     if (!isLoading) {
-      console.log(user);
-      if (!user) {
-        router.push("/sign-in");
+      if (!user && !allowNoUser) { // <-- Only redirect if not allowed
+        router.push("/");
         return;
       }
 
-      // Check if user's role is allowed
-      if (!allowedRoles.includes(user.role)) {
-        // Redirect to appropriate dashboard or specified redirect path
-        const defaultRedirect =
-          redirectTo || getDefaultRedirectForRole(user.role);
+      // Blocked roles logic
+      if (user && blockedRoles.length > 0 && blockedRoles.includes(user.role)) {
+        const defaultRedirect = redirectTo || getDefaultRedirectForRole(user.role);
+        router.push(defaultRedirect);
+        return;
+      }
+
+      // Allowed roles logic
+      if (user && !allowedRoles.includes(user.role)) {
+        const defaultRedirect = redirectTo || getDefaultRedirectForRole(user.role);
         router.push(defaultRedirect);
         return;
       }
     }
-  }, [user, isLoading, router, allowedRoles, redirectTo]);
+  }, [user, isLoading, router, allowedRoles, blockedRoles, redirectTo, allowNoUser]);
 
   const getDefaultRedirectForRole = (role: UserRole): string => {
     switch (role) {
@@ -60,11 +68,15 @@ export function AuthGuard({
     );
   }
 
-  if (!user) {
+  if (!user && !allowNoUser) {
     return fallback || null;
   }
 
-  if (!allowedRoles.includes(user.role)) {
+  if (user && blockedRoles.length > 0 && blockedRoles.includes(user.role)) {
+    return fallback || null;
+  }
+
+  if (user && !allowedRoles.includes(user.role)) {
     return fallback || null;
   }
 
@@ -142,7 +154,7 @@ export function StaffOrLawyerGuard({
   );
 }
 
-export function AuthenticatedGuard({
+export function BlockLawyerAndStaffGuardAllowGuest({
   children,
   fallback,
 }: {
@@ -150,7 +162,29 @@ export function AuthenticatedGuard({
   fallback?: ReactNode;
 }) {
   return (
-    <AuthGuard allowedRoles={[UserRole.USER, UserRole.LAWYER, UserRole.STAFF, UserRole.ADMIN]} fallback={fallback}>
+    <AuthGuard
+      blockedRoles={[UserRole.LAWYER, UserRole.STAFF]}
+      allowNoUser={true}
+      fallback={fallback}
+    >
+      {children}
+    </AuthGuard>
+  );
+}
+
+export function BlockLawyerAndStaffGuardBlockGuest({
+  children,
+  fallback,
+}: {
+  children: ReactNode;
+  fallback?: ReactNode;
+}) {
+  return (
+    <AuthGuard
+      blockedRoles={[UserRole.LAWYER, UserRole.STAFF]}
+      allowNoUser={false}
+      fallback={fallback}
+    >
       {children}
     </AuthGuard>
   );

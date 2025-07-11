@@ -4,7 +4,7 @@ import Link from "next/link";
 import { MaxWidthWrapper } from "./max-width-wrapper";
 import { buttonVariants } from "./ui/button";
 import { ArrowRight, Menu, X, User, LogOut, Settings } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import Dock from "./ui/dock";
@@ -14,9 +14,7 @@ export const Navbar = () => {
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
-  const { user, logout, isLoading } = useAuth();
-
-  const isLoggedIn = !!user && !isLoading;
+  const { user, logout } = useAuth();
 
   const getInitials = (name: string) => {
     return name
@@ -37,6 +35,14 @@ export const Navbar = () => {
     { name: "Our lawyers", onClick: () => handleChangePage("/our-lawyers") },
     { name: "Contact us", onClick: () => handleChangePage("/contact-us") },
   ];
+
+  useEffect(() => {
+    console.log(user?.id);
+    // Close user menu when user changes
+    if (user) {
+      setUserMenuOpen(false);
+    }
+  }, [user]);
 
   return (
     <nav className="sticky z-[100] h-16 inset-x-0 top-0 w-full border-b border-gray-200 bg-white/80 backdrop-blur-lg transition-all">
@@ -104,7 +110,7 @@ export const Navbar = () => {
                     Contact us
                   </a>
                 </li>
-                {isLoggedIn && (
+                {user && (
                   <li>
                     <Link href="/profile" className="block px-4 py-2">
                       My Profile
@@ -117,9 +123,17 @@ export const Navbar = () => {
 
           {/* Right: Auth/User actions */}
           <div className="h-full flex items-center space-x-4 ml-2">
-            {isLoggedIn ? (
+            {user ? (
               <>
-
+                <Link
+                  href="/dashboard"
+                  className={buttonVariants({
+                    size: "sm",
+                    className: "flex items-center gap-1",
+                  })}
+                >
+                  Dashboard <ArrowRight className="ml-1.5 size-4" />
+                </Link>
                 {/* User Menu */}
                 <div className="relative">
                   <button

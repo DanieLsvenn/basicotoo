@@ -12,6 +12,10 @@ import {
   Package,
   LayoutDashboard,
   Archive,
+  Calendar,
+  BookOpenText,
+  MessageCircleMore,
+  IdCardLanyard,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { UserRole, useAuth } from "@/lib/auth-context";
@@ -26,7 +30,7 @@ const allNavItems = [
   {
     title: "Staff",
     href: "/dashboard/staff",
-    icon: Users,
+    icon: IdCardLanyard,
     roles: [UserRole.ADMIN],
   },
   {
@@ -62,20 +66,26 @@ const allNavItems = [
   {
     title: "Schedule",
     href: "/dashboard/lawyer-dashboard",
-    icon: Settings,
+    icon: Calendar,
     roles: [UserRole.LAWYER, UserRole.ADMIN],
   },
   {
     title: "Check Bookings",
     href: "/dashboard/check-bookings",
-    icon: Settings,
+    icon: BookOpenText,
     roles: [UserRole.STAFF, UserRole.ADMIN],
   },
   {
     title: "View Feedbacks",
     href: "/dashboard/view-feedbacks",
-    icon: Settings,
+    icon: MessageCircleMore,
     roles: [UserRole.STAFF, UserRole.ADMIN],
+  },
+  {
+    title: "User List",
+    href: "/dashboard/user-list",
+    icon: Users,
+    roles: [UserRole.ADMIN],
   },
 ];
 

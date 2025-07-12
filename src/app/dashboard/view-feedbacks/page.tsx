@@ -36,10 +36,10 @@ const ViewFeedbacksPage = () => {
 
   return (
     <div className="max-w-3xl mx-auto py-8">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-gray-900">User Feedback</h1>
+      </div>
       <Card>
-        <CardHeader>
-          <CardTitle>User Feedbacks</CardTitle>
-        </CardHeader>
         <CardContent>
           {loading ? (
             <div className="flex justify-center py-8">

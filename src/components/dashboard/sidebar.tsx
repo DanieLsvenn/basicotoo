@@ -75,7 +75,7 @@ const allNavItems = [
     title: "View Feedbacks",
     href: "/dashboard/view-feedbacks",
     icon: Settings,
-    roles: [UserRole.ADMIN],
+    roles: [UserRole.STAFF, UserRole.ADMIN],
   },
 ];
 

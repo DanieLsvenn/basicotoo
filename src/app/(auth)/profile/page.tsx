@@ -96,11 +96,6 @@ export default function ProfilePage() {
   const [feedbackId, setFeedbackId] = useState<string | null>(null);
   const [submittingFeedback, setSubmittingFeedback] = useState(false);
 
-  useEffect(() => {
-    fetchProfile();
-    fetchStats();
-  }, []);
-
   const fetchProfile = async () => {
     try {
       const token = Cookies.get("authToken");
@@ -270,10 +265,10 @@ export default function ProfilePage() {
         setProfile((prev) =>
           prev
             ? {
-                ...prev,
-                fullName: editForm.fullName,
-                gender: editForm.gender,
-              }
+              ...prev,
+              fullName: editForm.fullName,
+              gender: editForm.gender,
+            }
             : null
         );
 
@@ -416,6 +411,11 @@ export default function ProfilePage() {
     }
   };
 
+  useEffect(() => {
+    fetchProfile();
+    fetchStats();
+  }, []);
+
   // Fetch bookings when the tab is first shown:
   useEffect(() => {
     if (profile?.accountId) fetchBookings();
@@ -424,6 +424,13 @@ export default function ProfilePage() {
   // Fetch completed bookings when the tab is first shown:
   useEffect(() => {
     if (profile?.accountId) fetchCompletedBookings();
+  }, [profile?.accountId]);
+
+  // Fetch tickets when profile.accountId is available
+  useEffect(() => {
+    if (profile?.accountId) {
+      fetchTickets();
+    }
   }, [profile?.accountId]);
 
   // Fetch feedback for a booking
@@ -469,11 +476,11 @@ export default function ProfilePage() {
       const body = feedbackId
         ? JSON.stringify({ feedbackContent, rating: feedbackRating })
         : JSON.stringify({
-            bookingId: feedbackBooking.bookingId,
-            customerId: profile?.accountId,
-            feedbackContent,
-            rating: feedbackRating,
-          });
+          bookingId: feedbackBooking.bookingId,
+          customerId: profile?.accountId,
+          feedbackContent,
+          rating: feedbackRating,
+        });
 
       const res = await fetch(url, {
         method,
@@ -1076,8 +1083,8 @@ export default function ProfilePage() {
                     {submittingFeedback
                       ? "Submitting..."
                       : feedbackId
-                      ? "Update Feedback"
-                      : "Submit Feedback"}
+                        ? "Update Feedback"
+                        : "Submit Feedback"}
                   </Button>
                 </div>
               </DialogContent>

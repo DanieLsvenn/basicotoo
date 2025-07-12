@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import Cookies from "js-cookie";
 import { toast } from "sonner";
-import { Download, FileText, Loader2, Edit } from "lucide-react";
+import { Download, FileText, Loader2, Edit, Ticket } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { Card, CardContent } from "./ui/card";
 import { Button } from "./ui/button";
@@ -272,14 +272,14 @@ export function PurchasedFormsTab({ customerId }: PurchasedFormsTabProps) {
                       variant={isEditable ? "default" : "secondary"}
                       className="ml-2"
                     >
-                      {isEditable ? "Editable" : "Finalized"}
+                      {isEditable ? "Editable" : "Used"}
                     </Badge>
                   </div>
 
                   {form.template && (
                     <div className="mb-3">
-                      <p className="text-xs text-gray-500 mb-1">
-                        Price: ${form.template.price}
+                      <p className="text-xs text-gray-500 mb-1 flex items-center gap-1">
+                        Price: <Ticket className="w-4 h-4 text-amber-600" /> {form.template.price}
                       </p>
                       <p className="text-xs text-gray-400">
                         Status: {form.template.status}

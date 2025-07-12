@@ -154,7 +154,7 @@ export function StaffOrLawyerGuard({
   );
 }
 
-export function BlockLawyerAndStaffGuardAllowGuest({
+export function BlockLawyerAndStaffAllowGuestGuard({
   children,
   fallback,
 }: {

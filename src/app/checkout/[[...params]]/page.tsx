@@ -756,6 +756,8 @@ export default function CheckoutPage() {
   useEffect(() => {
     if (mode === "booking" && selectedDate && lawyerId) {
       fetchAvailableSlots(selectedDate);
+      const interval = setInterval(() => fetchAvailableSlots(selectedDate), 20000);
+      return () => clearInterval(interval);
     }
   }, [selectedDate, lawyerId, fetchAvailableSlots, mode]);
 

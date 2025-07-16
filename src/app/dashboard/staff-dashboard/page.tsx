@@ -2,13 +2,18 @@
 
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { User, Clock, FileText, XCircle, Filter } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import React, { useState, useEffect, useCallback } from "react";
+import { User, Clock, FileText, XCircle, Filter } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
@@ -50,29 +55,32 @@ const StaffDashboard = () => {
   const [loading, setLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showDialog, setShowDialog] = useState(false);
-  const [dialogMessage, setDialogMessage] = useState('');
+  const [dialogMessage, setDialogMessage] = useState("");
   const [statusFilter, setStatusFilter] = useState({
     pending: true,
-    resolved: true
+    resolved: true,
   });
 
   const fetchProfile = useCallback(async () => {
     try {
       const token = document.cookie
-        .split('; ')
-        .find(row => row.startsWith('authToken='))
-        ?.split('=')[1];
-      
+        .split("; ")
+        .find((row) => row.startsWith("authToken="))
+        ?.split("=")[1];
+
       if (!token) {
         console.error("Please login to continue");
         return;
       }
 
-      const response = await fetch("https://localhost:7218/api/Account/profile", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      const response = await fetch(
+        "https://localhost:7218/api/Account/profile",
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
 
       if (response.ok) {
         const data = await response.json();
@@ -89,10 +97,10 @@ const StaffDashboard = () => {
     setLoading(true);
     try {
       const token = document.cookie
-        .split('; ')
-        .find(row => row.startsWith('authToken='))
-        ?.split('=')[1];
-      
+        .split("; ")
+        .find((row) => row.startsWith("authToken="))
+        ?.split("=")[1];
+
       if (!token) {
         console.error("Please login to continue");
         return;
@@ -140,14 +148,14 @@ const StaffDashboard = () => {
 
     try {
       const token = document.cookie
-        .split('; ')
-        .find(row => row.startsWith('authToken='))
-        ?.split('=')[1];
-      
+        .split("; ")
+        .find((row) => row.startsWith("authToken="))
+        ?.split("=")[1];
+
       const staffId = document.cookie
-        .split('; ')
-        .find(row => row.startsWith('userId='))
-        ?.split('=')[1];
+        .split("; ")
+        .find((row) => row.startsWith("userId="))
+        ?.split("=")[1];
 
       const replyResponse = await fetch(
         `https://localhost:7103/api/Ticket/${selectedTicket.ticketId}/reply`,
@@ -196,17 +204,17 @@ const StaffDashboard = () => {
     setResponse(ticket.response || "");
   };
 
-  const toggleStatusFilter = (status: 'pending' | 'resolved') => {
-    setStatusFilter(prev => ({
+  const toggleStatusFilter = (status: "pending" | "resolved") => {
+    setStatusFilter((prev) => ({
       ...prev,
-      [status]: !prev[status]
+      [status]: !prev[status],
     }));
   };
 
   const getFilteredTickets = () => {
-    return tickets.filter(ticket => {
-      if (ticket.status === 'Pending' && statusFilter.pending) return true;
-      if (ticket.status === 'Resolved' && statusFilter.resolved) return true;
+    return tickets.filter((ticket) => {
+      if (ticket.status === "Pending" && statusFilter.pending) return true;
+      if (ticket.status === "Resolved" && statusFilter.resolved) return true;
       return false;
     });
   };
@@ -217,16 +225,15 @@ const StaffDashboard = () => {
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-7xl mx-auto">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Staff Dashboard</h1>
-          <p className="text-gray-600 mt-2">
-            Welcome back, {profile?.fullName || 'Loading...'}
-          </p>
+          <h1 className="text-3xl font-bold text-gray-900">View Requests</h1>
         </div>
 
         <Tabs defaultValue="tickets" className="w-full">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="tickets">Support Tickets</TabsTrigger>
-            <TabsTrigger value="analytics" disabled>Analytics</TabsTrigger>
+            <TabsTrigger value="analytics" disabled>
+              Analytics
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="tickets" className="mt-6">
@@ -243,22 +250,22 @@ const StaffDashboard = () => {
                       <span className="text-sm text-gray-600">Filter by:</span>
                     </div>
                     <button
-                      onClick={() => toggleStatusFilter('pending')}
+                      onClick={() => toggleStatusFilter("pending")}
                       className={`flex items-center space-x-2 px-3 py-1 rounded-full text-sm transition-all ${
                         statusFilter.pending
-                          ? 'bg-yellow-100 text-yellow-800'
-                          : 'bg-gray-100 text-gray-500'
+                          ? "bg-yellow-100 text-yellow-800"
+                          : "bg-gray-100 text-gray-500"
                       }`}
                     >
                       <div className="w-2 h-2 rounded-full bg-yellow-400"></div>
                       <span>Pending</span>
                     </button>
                     <button
-                      onClick={() => toggleStatusFilter('resolved')}
+                      onClick={() => toggleStatusFilter("resolved")}
                       className={`flex items-center space-x-2 px-3 py-1 rounded-full text-sm transition-all ${
                         statusFilter.resolved
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-gray-100 text-gray-500'
+                          ? "bg-green-100 text-green-800"
+                          : "bg-gray-100 text-gray-500"
                       }`}
                     >
                       <div className="w-2 h-2 rounded-full bg-green-400"></div>
@@ -300,14 +307,20 @@ const StaffDashboard = () => {
                                   {ticket.content_Send}
                                 </div>
                               </TableCell>
-                              <TableCell>{formatDate(ticket.createdAt)}</TableCell>
+                              <TableCell>
+                                {formatDate(ticket.createdAt)}
+                              </TableCell>
                               <TableCell>
                                 <Badge
-                                  variant={ticket.status === 'Pending' ? 'secondary' : 'default'}
+                                  variant={
+                                    ticket.status === "Pending"
+                                      ? "secondary"
+                                      : "default"
+                                  }
                                   className={
-                                    ticket.status === 'Pending'
-                                      ? 'bg-yellow-500 text-white'
-                                      : 'bg-green-500 text-white'
+                                    ticket.status === "Pending"
+                                      ? "bg-yellow-500 text-white"
+                                      : "bg-green-500 text-white"
                                   }
                                 >
                                   {ticket.status}
@@ -319,7 +332,9 @@ const StaffDashboard = () => {
                                   variant="outline"
                                   onClick={() => handleTicketClick(ticket)}
                                 >
-                                  {ticket.status === "Pending" ? "Respond" : "View"}
+                                  {ticket.status === "Pending"
+                                    ? "Respond"
+                                    : "View"}
                                 </Button>
                               </TableCell>
                             </TableRow>
@@ -327,7 +342,9 @@ const StaffDashboard = () => {
                         ) : (
                           <TableRow>
                             <TableCell colSpan={5} className="text-center py-8">
-                              {tickets.length === 0 ? "No tickets found" : "No tickets match the current filter"}
+                              {tickets.length === 0
+                                ? "No tickets found"
+                                : "No tickets match the current filter"}
                             </TableCell>
                           </TableRow>
                         )}
@@ -341,11 +358,16 @@ const StaffDashboard = () => {
         </Tabs>
 
         {/* Ticket Detail Dialog */}
-        <Dialog open={!!selectedTicket} onOpenChange={() => setSelectedTicket(null)}>
+        <Dialog
+          open={!!selectedTicket}
+          onOpenChange={() => setSelectedTicket(null)}
+        >
           <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle>
-                {selectedTicket?.status === "Pending" ? "Respond to Ticket" : "Ticket Details"}
+                {selectedTicket?.status === "Pending"
+                  ? "Respond to Ticket"
+                  : "Ticket Details"}
               </DialogTitle>
             </DialogHeader>
             {selectedTicket && (
@@ -353,8 +375,16 @@ const StaffDashboard = () => {
                 <div className="flex items-center justify-between">
                   <span className="font-medium">Status:</span>
                   <Badge
-                    variant={selectedTicket.status === 'Resolved' ? 'default' : 'secondary'}
-                    className={selectedTicket.status === 'Resolved' ? 'bg-green-500' : 'bg-yellow-500'}
+                    variant={
+                      selectedTicket.status === "Resolved"
+                        ? "default"
+                        : "secondary"
+                    }
+                    className={
+                      selectedTicket.status === "Resolved"
+                        ? "bg-green-500"
+                        : "bg-yellow-500"
+                    }
                   >
                     {selectedTicket.status}
                   </Badge>
@@ -365,7 +395,9 @@ const StaffDashboard = () => {
                     <User className="h-4 w-4 mt-1 text-gray-500" />
                     <div>
                       <p className="font-medium">User</p>
-                      <p className="text-sm text-gray-600">{selectedTicket.userName}</p>
+                      <p className="text-sm text-gray-600">
+                        {selectedTicket.userName}
+                      </p>
                     </div>
                   </div>
 
@@ -373,7 +405,9 @@ const StaffDashboard = () => {
                     <Clock className="h-4 w-4 mt-1 text-gray-500" />
                     <div>
                       <p className="font-medium">Date</p>
-                      <p className="text-sm text-gray-600">{formatDate(selectedTicket.createdAt)}</p>
+                      <p className="text-sm text-gray-600">
+                        {formatDate(selectedTicket.createdAt)}
+                      </p>
                     </div>
                   </div>
 
@@ -403,7 +437,9 @@ const StaffDashboard = () => {
                     </div>
                   ) : (
                     <div className="space-y-2">
-                      <Label htmlFor="response" className="font-medium">Your Response</Label>
+                      <Label htmlFor="response" className="font-medium">
+                        Your Response
+                      </Label>
                       <Textarea
                         id="response"
                         value={response}

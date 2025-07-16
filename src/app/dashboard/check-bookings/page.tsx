@@ -123,12 +123,13 @@ export default function CheckBookings() {
 
   return (
     <MaxWidthWrapper>
+      <div className="mb-8 max-w-7xl mx-auto">
+        <h1 className="text-3xl font-bold text-gray-900">Lawyer Dashboard</h1>
+        <p className="text-gray-600 mt-2"></p>
+      </div>
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Calendar className="h-5 w-5" />
-            Check Bookings (Staff)
-          </CardTitle>
+          <CardTitle className="flex items-center gap-2"></CardTitle>
           <div className="flex items-center gap-2 mt-2">
             <input
               type="date"

@@ -41,6 +41,7 @@ import {
   Ticket,
 } from "lucide-react";
 import { toast } from "sonner";
+import { MaxWidthWrapper } from "@/components/max-width-wrapper";
 
 // Dynamic import for TinyMCE editor to avoid SSR issues
 const DynamicEditor = dynamic(() => import("@/components/DynamicEditor"), {
@@ -383,13 +384,10 @@ export default function FormTemplatesPage() {
   );
 
   // Handle filter mode change
-  const handleFilterChange = useCallback(
-    (mode: FilterMode) => {
-      setFilterMode(mode);
-      setRefreshKey((prev) => prev + 1);
-    },
-    []
-  );
+  const handleFilterChange = useCallback((mode: FilterMode) => {
+    setFilterMode(mode);
+    setRefreshKey((prev) => prev + 1);
+  }, []);
 
   // Effects
   useEffect(() => {
@@ -823,37 +821,39 @@ export default function FormTemplatesPage() {
 
   // Main render logic
   return (
-    <div className="min-h-screen bg-background py-8 px-4 sm:px-6 lg:px-8">
-      {viewMode === "list" && renderTemplateList()}
-      {(viewMode === "create" || viewMode === "edit") && renderTemplateForm()}
-      {viewMode === "view" && renderTemplateView()}
+    <MaxWidthWrapper>
+      <div className="min-h-screen bg-background py-8 px-4 sm:px-6 lg:px-8">
+        {viewMode === "list" && renderTemplateList()}
+        {(viewMode === "create" || viewMode === "edit") && renderTemplateForm()}
+        {viewMode === "view" && renderTemplateView()}
 
-      {/* Delete Confirmation Dialog */}
-      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete Template</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete{" "}
-              <span className="font-semibold">
-                {deleteTarget?.formTemplateName}
-              </span>
-              ? This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex justify-end space-x-2 mt-4">
-            <Button
-              variant="outline"
-              onClick={() => setDeleteDialogOpen(false)}
-            >
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={handleConfirmDelete}>
-              Delete
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-    </div>
+        {/* Delete Confirmation Dialog */}
+        <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Delete Template</DialogTitle>
+              <DialogDescription>
+                Are you sure you want to delete{" "}
+                <span className="font-semibold">
+                  {deleteTarget?.formTemplateName}
+                </span>
+                ? This action cannot be undone.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex justify-end space-x-2 mt-4">
+              <Button
+                variant="outline"
+                onClick={() => setDeleteDialogOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button variant="destructive" onClick={handleConfirmDelete}>
+                Delete
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
+    </MaxWidthWrapper>
   );
 }

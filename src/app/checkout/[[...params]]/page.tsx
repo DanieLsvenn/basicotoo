@@ -175,6 +175,50 @@ function parseCheckoutParams(params: string[]): CheckoutMode | null {
   return null;
 }
 
+function areTimeSlotsConsecutive(slots: Slot[], selectedSlotIds: string[]): boolean {
+  if (selectedSlotIds.length <= 1) return true;
+
+  // Get selected slots and sort by start time
+  const selectedSlots = slots
+    .filter(slot => selectedSlotIds.includes(slot.slotId))
+    .sort((a, b) => a.slotStartTime.localeCompare(b.slotStartTime));
+
+  // Check if each slot is consecutive to the next
+  for (let i = 0; i < selectedSlots.length - 1; i++) {
+    const currentSlot = selectedSlots[i];
+    const nextSlot = selectedSlots[i + 1];
+
+    // Current slot's end time should match next slot's start time
+    if (currentSlot.slotEndTime !== nextSlot.slotStartTime) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function canAddSlot(slots: Slot[], selectedSlotIds: string[], newSlotId: string): boolean {
+  if (selectedSlotIds.length === 0) return true;
+
+  const newSlot = slots.find(slot => slot.slotId === newSlotId);
+  if (!newSlot) return false;
+
+  // Check if the new slot can be added to maintain consecutiveness
+  const testSelection = [...selectedSlotIds, newSlotId];
+  return areTimeSlotsConsecutive(slots, testSelection);
+}
+
+function isSlotSelectable(slots: Slot[], selectedSlotIds: string[], slotId: string): boolean {
+  // If slot is already selected, it can be deselected
+  if (selectedSlotIds.includes(slotId)) return true;
+
+  // If no slots selected, any slot can be selected
+  if (selectedSlotIds.length === 0) return true;
+
+  // Check if adding this slot maintains consecutiveness
+  return canAddSlot(slots, selectedSlotIds, slotId);
+}
+
 export default function CheckoutPage() {
   const params = useParams();
   const router = useRouter();
@@ -276,7 +320,6 @@ export default function CheckoutPage() {
       const response = await fetch(
         `https://localhost:7286/api/Booking?customerId=${profile.accountId}&status=Pending`
       );
-      console.log(`customerId=${profile.accountId}&status=Pending`);
 
       if (response.status === 204) {
         // No content, skip further processing
@@ -400,12 +443,21 @@ export default function CheckoutPage() {
   const handleSlotSelection = (slotId: string) => {
     setSelectedSlots(prev => {
       if (prev.includes(slotId)) {
+        // Remove the slot
         return prev.filter(id => id !== slotId);
       } else {
-        return [...prev, slotId];
+        // Add the slot only if it maintains consecutiveness
+        if (canAddSlot(availableSlots, prev, slotId)) {
+          return [...prev, slotId];
+        } else {
+          toast.error("Please select consecutive time slots only");
+          return prev;
+        }
       }
     });
   };
+
+  const areSelectedSlotsConsecutive = areTimeSlotsConsecutive(availableSlots, selectedSlots);
 
   // Ticket-specific functions
   const fetchTicketPackage = useCallback(async () => {
@@ -1156,16 +1208,27 @@ export default function CheckoutPage() {
                         </div>
                       ) : (
                         <div className="grid grid-cols-2 gap-3">
-                          {availableSlots.map((slot) => (
-                            <Button
-                              key={slot.slotId}
-                              variant={selectedSlots.includes(slot.slotId) ? "default" : "outline"}
-                              onClick={() => handleSlotSelection(slot.slotId)}
-                              className="justify-center"
-                            >
-                              {formatTime(slot.slotStartTime)} - {formatTime(slot.slotEndTime)}
-                            </Button>
-                          ))}
+                          {availableSlots.map((slot) => {
+                            const isSelected = selectedSlots.includes(slot.slotId);
+                            const isSelectable = isSlotSelectable(availableSlots, selectedSlots, slot.slotId);
+
+                            return (
+                              <Button
+                                key={slot.slotId}
+                                variant={isSelected ? "default" : "outline"}
+                                onClick={() => handleSlotSelection(slot.slotId)}
+                                disabled={!isSelectable}
+                                className="justify-center"
+                                style={
+                                  !isSelectable && !isSelected
+                                    ? { opacity: 0.25, pointerEvents: "none" }
+                                    : undefined
+                                }
+                              >
+                                {formatTime(slot.slotStartTime)} - {formatTime(slot.slotEndTime)}
+                              </Button>
+                            );
+                          })}
                         </div>
                       )}
                     </CardContent>
@@ -1317,7 +1380,13 @@ export default function CheckoutPage() {
                       ) : (
                         <Button
                           onClick={handleBooking}
-                          disabled={booking || selectedSlots.length === 0 || !selectedDate || !description.trim()}
+                          disabled={
+                            booking ||
+                            selectedSlots.length === 0 ||
+                            !selectedDate ||
+                            !description.trim() ||
+                            !areSelectedSlotsConsecutive
+                          }
                           className="w-full bg-blue-600 hover:bg-blue-700 text-white"
                           size="lg"
                         >

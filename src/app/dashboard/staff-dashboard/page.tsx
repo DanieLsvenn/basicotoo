@@ -41,10 +41,13 @@ interface Ticket {
   ticketId: string;
   userId: string;
   userName: string;
+  staffId?: string;
+  serviceId?: string;
   content_Send: string;
+  content_Response?: string;
   response?: string;
   createdAt: string;
-  status: "Pending" | "Resolved";
+  status: string;
 }
 
 const StaffDashboard = () => {
@@ -61,15 +64,31 @@ const StaffDashboard = () => {
     resolved: true,
   });
 
+  const getToken = () => {
+    if (typeof document === "undefined") return null;
+    const token = document.cookie
+      .split("; ")
+      .find((row) => row.startsWith("authToken="))
+      ?.split("=")[1];
+    return token;
+  };
+
+  const getUserId = () => {
+    if (typeof document === "undefined") return null;
+    const userId = document.cookie
+      .split("; ")
+      .find((row) => row.startsWith("userId="))
+      ?.split("=")[1];
+    return userId;
+  };
+
   const fetchProfile = useCallback(async () => {
     try {
-      const token = document.cookie
-        .split("; ")
-        .find((row) => row.startsWith("authToken="))
-        ?.split("=")[1];
+      const token = getToken();
 
       if (!token) {
-        console.error("Please login to continue");
+        console.error("No auth token found");
+        toast.error("Please login to continue");
         return;
       }
 
@@ -78,6 +97,7 @@ const StaffDashboard = () => {
         {
           headers: {
             Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
           },
         }
       );
@@ -85,41 +105,86 @@ const StaffDashboard = () => {
       if (response.ok) {
         const data = await response.json();
         setProfile(data);
+        console.log("Profile fetched successfully:", data);
       } else {
-        throw new Error("Failed to fetch profile");
+        const errorData = await response
+          .json()
+          .catch(() => ({ message: "Unknown error" }));
+        console.error("Profile fetch failed:", response.status, errorData);
+
+        if (response.status === 401) {
+          toast.error("Session expired. Please login again.");
+        } else {
+          toast.error("Failed to fetch profile");
+        }
       }
     } catch (error) {
       console.error("Failed to fetch profile:", error);
+      toast.error("Failed to fetch profile");
     }
   }, []);
 
   const fetchTickets = useCallback(async () => {
     setLoading(true);
     try {
-      const token = document.cookie
-        .split("; ")
-        .find((row) => row.startsWith("authToken="))
-        ?.split("=")[1];
+      const token = getToken();
 
       if (!token) {
-        console.error("Please login to continue");
+        console.error("No auth token found");
+        toast.error("Please login to continue");
         return;
       }
+
+      console.log(
+        "Fetching tickets with token:",
+        token ? "Token present" : "No token"
+      );
 
       const response = await fetch("https://localhost:7103/api/Ticket/all", {
         method: "GET",
         headers: {
           Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
         },
       });
 
+      console.log("Tickets response status:", response.status);
+
       if (!response.ok) {
-        throw new Error("Failed to fetch tickets");
+        const errorData = await response
+          .json()
+          .catch(() => ({ message: "Unknown error" }));
+        console.error("Tickets fetch failed:", response.status, errorData);
+
+        if (response.status === 401) {
+          toast.error("Session expired. Please login again.");
+        } else {
+          toast.error("Failed to fetch tickets");
+        }
+        return;
       }
 
       const data = await response.json();
-      setTickets(data);
-      console.log("Total tickets fetched:", data.length);
+      console.log("Raw tickets data:", data);
+
+      const ticketsArray = Array.isArray(data) ? data : data.tickets || [];
+
+      const mappedTickets = ticketsArray.map((ticket: any) => ({
+        ticketId: ticket.ticketId,
+        userId: ticket.userId,
+        userName: ticket.userName || "Unknown User",
+        staffId: ticket.staffId,
+        serviceId: ticket.serviceId,
+        content_Send: ticket.content_Send,
+        content_Response: ticket.content_Response,
+        response: ticket.response || ticket.content_Response,
+        createdAt: ticket.createdAt,
+        status: ticket.status || "Pending",
+      }));
+
+      setTickets(mappedTickets);
+      console.log("Processed tickets:", mappedTickets);
+      console.log("Total tickets fetched:", mappedTickets.length);
     } catch (error) {
       toast.error("Failed to fetch tickets");
       console.error("Fetch tickets error:", error);
@@ -133,29 +198,21 @@ const StaffDashboard = () => {
   }, [fetchProfile]);
 
   useEffect(() => {
-    if (profile) {
-      fetchTickets();
-    }
-  }, [profile, fetchTickets]);
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleString();
-  };
+    fetchTickets();
+  }, [fetchTickets]);
 
   const handleReply = async () => {
     if (!selectedTicket || !response) return;
     setIsSubmitting(true);
 
     try {
-      const token = document.cookie
-        .split("; ")
-        .find((row) => row.startsWith("authToken="))
-        ?.split("=")[1];
+      const token = getToken();
+      const staffId = getUserId();
 
-      const staffId = document.cookie
-        .split("; ")
-        .find((row) => row.startsWith("userId="))
-        ?.split("=")[1];
+      if (!token) {
+        toast.error("Please login to continue");
+        return;
+      }
 
       const replyResponse = await fetch(
         `https://localhost:7103/api/Ticket/${selectedTicket.ticketId}/reply`,
@@ -174,17 +231,23 @@ const StaffDashboard = () => {
       );
 
       if (!replyResponse.ok) {
-        const errorData = await replyResponse.json();
+        const errorData = await replyResponse
+          .json()
+          .catch(() => ({ message: "Unknown error" }));
+        console.error("Reply failed:", replyResponse.status, errorData);
         throw new Error(errorData.message || "Failed to send response");
       }
 
       toast.success("Response sent successfully");
-
-      // Update the local state to reflect the change
       setTickets((prevTickets) =>
         prevTickets.map((ticket) =>
           ticket.ticketId === selectedTicket.ticketId
-            ? { ...ticket, response, status: "Resolved" }
+            ? {
+                ...ticket,
+                response,
+                content_Response: response,
+                status: "ANSWERED",
+              }
             : ticket
         )
       );
@@ -201,7 +264,7 @@ const StaffDashboard = () => {
 
   const handleTicketClick = (ticket: Ticket) => {
     setSelectedTicket(ticket);
-    setResponse(ticket.response || "");
+    setResponse(ticket.response || ticket.content_Response || "");
   };
 
   const toggleStatusFilter = (status: "pending" | "resolved") => {
@@ -213,10 +276,46 @@ const StaffDashboard = () => {
 
   const getFilteredTickets = () => {
     return tickets.filter((ticket) => {
-      if (ticket.status === "Pending" && statusFilter.pending) return true;
-      if (ticket.status === "Resolved" && statusFilter.resolved) return true;
+      const status = ticket.status?.toLowerCase() || "pending";
+
+      const isPending =
+        status === "pending" || status === "inprogress" || status === "new";
+      const isResolved =
+        status === "resolved" || status === "answered" || status === "closed";
+
+      if (isPending && statusFilter.pending) return true;
+      if (isResolved && statusFilter.resolved) return true;
       return false;
     });
+  };
+
+  const getStatusDisplay = (status: string) => {
+    const statusLower = status?.toLowerCase() || "pending";
+
+    switch (statusLower) {
+      case "answered":
+      case "resolved":
+      case "closed":
+        return {
+          text: "Resolved",
+          variant: "default" as const,
+          color: "bg-green-500",
+        };
+      case "inprogress":
+        return {
+          text: "In Progress",
+          variant: "secondary" as const,
+          color: "bg-blue-500",
+        };
+      case "pending":
+      case "new":
+      default:
+        return {
+          text: "Pending",
+          variant: "secondary" as const,
+          color: "bg-yellow-500",
+        };
+    }
   };
 
   const filteredTickets = getFilteredTickets();
@@ -226,6 +325,10 @@ const StaffDashboard = () => {
       <div className="max-w-7xl mx-auto">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">View Requests</h1>
+          {/* Debug info */}
+          <div className="mt-2 text-sm text-gray-500">
+            Total tickets: {tickets.length} | Filtered: {filteredTickets.length}
+          </div>
         </div>
 
         <Tabs defaultValue="tickets" className="w-full">
@@ -271,6 +374,14 @@ const StaffDashboard = () => {
                       <div className="w-2 h-2 rounded-full bg-green-400"></div>
                       <span>Resolved</span>
                     </button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={fetchTickets}
+                      disabled={loading}
+                    >
+                      {loading ? "Refreshing..." : "Refresh"}
+                    </Button>
                   </div>
                 </CardTitle>
               </CardHeader>
@@ -288,57 +399,48 @@ const StaffDashboard = () => {
                     <Table>
                       <TableHeader className="bg-gray-50">
                         <TableRow>
-                          <TableHead className="w-[150px]">User</TableHead>
+                          <TableHead className="w-[150px]">User ID</TableHead>
                           <TableHead>Request</TableHead>
-                          <TableHead className="w-[180px]">Date</TableHead>
                           <TableHead className="w-[100px]">Status</TableHead>
                           <TableHead className="w-[100px]">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {filteredTickets.length > 0 ? (
-                          filteredTickets.map((ticket) => (
-                            <TableRow key={ticket.ticketId}>
-                              <TableCell className="font-medium">
-                                {ticket.userName}
-                              </TableCell>
-                              <TableCell>
-                                <div className="max-w-xs truncate">
-                                  {ticket.content_Send}
-                                </div>
-                              </TableCell>
-                              <TableCell>
-                                {formatDate(ticket.createdAt)}
-                              </TableCell>
-                              <TableCell>
-                                <Badge
-                                  variant={
-                                    ticket.status === "Pending"
-                                      ? "secondary"
-                                      : "default"
-                                  }
-                                  className={
-                                    ticket.status === "Pending"
-                                      ? "bg-yellow-500 text-white"
-                                      : "bg-green-500 text-white"
-                                  }
-                                >
-                                  {ticket.status}
-                                </Badge>
-                              </TableCell>
-                              <TableCell>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => handleTicketClick(ticket)}
-                                >
-                                  {ticket.status === "Pending"
-                                    ? "Respond"
-                                    : "View"}
-                                </Button>
-                              </TableCell>
-                            </TableRow>
-                          ))
+                          filteredTickets.map((ticket) => {
+                            const statusInfo = getStatusDisplay(ticket.status);
+                            return (
+                              <TableRow key={ticket.ticketId}>
+                                <TableCell className="font-medium">
+                                  {ticket.userId}
+                                </TableCell>
+                                <TableCell>
+                                  <div className="max-w-xs truncate">
+                                    {ticket.content_Send}
+                                  </div>
+                                </TableCell>
+                                <TableCell>
+                                  <Badge
+                                    variant={statusInfo.variant}
+                                    className={`${statusInfo.color} text-white`}
+                                  >
+                                    {statusInfo.text}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => handleTicketClick(ticket)}
+                                  >
+                                    {statusInfo.text === "Pending"
+                                      ? "Respond"
+                                      : "View"}
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })
                         ) : (
                           <TableRow>
                             <TableCell colSpan={5} className="text-center py-8">
@@ -365,7 +467,8 @@ const StaffDashboard = () => {
           <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle>
-                {selectedTicket?.status === "Pending"
+                {selectedTicket &&
+                getStatusDisplay(selectedTicket.status).text === "Pending"
                   ? "Respond to Ticket"
                   : "Ticket Details"}
               </DialogTitle>
@@ -375,18 +478,10 @@ const StaffDashboard = () => {
                 <div className="flex items-center justify-between">
                   <span className="font-medium">Status:</span>
                   <Badge
-                    variant={
-                      selectedTicket.status === "Resolved"
-                        ? "default"
-                        : "secondary"
-                    }
-                    className={
-                      selectedTicket.status === "Resolved"
-                        ? "bg-green-500"
-                        : "bg-yellow-500"
-                    }
+                    variant={getStatusDisplay(selectedTicket.status).variant}
+                    className={getStatusDisplay(selectedTicket.status).color}
                   >
-                    {selectedTicket.status}
+                    {getStatusDisplay(selectedTicket.status).text}
                   </Badge>
                 </div>
 
@@ -394,19 +489,9 @@ const StaffDashboard = () => {
                   <div className="flex items-start space-x-3">
                     <User className="h-4 w-4 mt-1 text-gray-500" />
                     <div>
-                      <p className="font-medium">User</p>
+                      <p className="font-medium">User ID</p>
                       <p className="text-sm text-gray-600">
-                        {selectedTicket.userName}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-start space-x-3">
-                    <Clock className="h-4 w-4 mt-1 text-gray-500" />
-                    <div>
-                      <p className="font-medium">Date</p>
-                      <p className="text-sm text-gray-600">
-                        {formatDate(selectedTicket.createdAt)}
+                        {selectedTicket.userId}
                       </p>
                     </div>
                   </div>
@@ -423,14 +508,16 @@ const StaffDashboard = () => {
                     </div>
                   </div>
 
-                  {selectedTicket.response ? (
+                  {selectedTicket.response ||
+                  selectedTicket.content_Response ? (
                     <div className="flex items-start space-x-3">
                       <FileText className="h-4 w-4 mt-1 text-gray-500" />
                       <div className="w-full">
                         <p className="font-medium">Your Response</p>
                         <div className="bg-blue-50 p-4 rounded mt-2">
                           <p className="whitespace-pre-wrap text-sm">
-                            {selectedTicket.response}
+                            {selectedTicket.response ||
+                              selectedTicket.content_Response}
                           </p>
                         </div>
                       </div>

@@ -29,6 +29,7 @@ import {
   Clock,
   CheckCircle,
   RefreshCw,
+  Landmark,
 } from "lucide-react";
 import Cookies from "js-cookie";
 import { PurchasedFormsTab } from "@/components/PurchasedFormsTab";
@@ -40,6 +41,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import Link from "next/link";
 
 interface UserProfile {
   accountId: string;
@@ -84,8 +86,6 @@ export default function ProfilePage() {
     fullName: "",
     gender: 0,
   });
-  const [bookings, setBookings] = useState<any[]>([]);
-  const [isLoadingBookings, setIsLoadingBookings] = useState(false);
   const [completedBookings, setCompletedBookings] = useState<any[]>([]);
   const [isLoadingCompletedBookings, setIsLoadingCompletedBookings] =
     useState(false);
@@ -95,6 +95,11 @@ export default function ProfilePage() {
   const [feedbackRating, setFeedbackRating] = useState(5);
   const [feedbackId, setFeedbackId] = useState<string | null>(null);
   const [submittingFeedback, setSubmittingFeedback] = useState(false);
+  const [bookingsPending, setBookingsPending] = useState<any[]>([]);
+  const [bookingsPaid, setBookingsPaid] = useState<any[]>([]);
+  const [isLoadingBookingsPending, setIsLoadingBookingsPending] = useState(false);
+  const [isLoadingBookingsPaid, setIsLoadingBookingsPaid] = useState(false);
+  const [bookingsTab, setBookingsTab] = useState<"Pending" | "Paid">("Pending");
 
   const fetchProfile = async () => {
     try {
@@ -352,9 +357,37 @@ export default function ProfilePage() {
     fetchTickets();
   };
 
-  const fetchBookings = async () => {
+  const fetchBookingsPending = async () => {
     if (!profile?.accountId) return;
-    setIsLoadingBookings(true);
+    setIsLoadingBookingsPending(true);
+    try {
+      const token = Cookies.get("authToken");
+      const response = await fetch(
+        `https://localhost:7286/api/Booking?customerId=${profile.accountId}&status=Pending`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      if (response.status === 204) {
+        setBookingsPending([]);
+      } else if (response.ok) {
+        const data = await response.json();
+        setBookingsPending(data);
+      } else {
+        throw new Error("Failed to fetch pending bookings");
+      }
+    } catch (error) {
+      toast.error("Failed to load pending bookings");
+    } finally {
+      setIsLoadingBookingsPending(false);
+    }
+  };
+
+  const fetchBookingsPaid = async () => {
+    if (!profile?.accountId) return;
+    setIsLoadingBookingsPaid(true);
     try {
       const token = Cookies.get("authToken");
       const response = await fetch(
@@ -366,20 +399,17 @@ export default function ProfilePage() {
         }
       );
       if (response.status === 204) {
-        setBookings([]);
+        setBookingsPaid([]);
       } else if (response.ok) {
         const data = await response.json();
-        setBookings(data);
+        setBookingsPaid(data);
       } else {
-        throw new Error("Failed to fetch bookings");
+        throw new Error("Failed to fetch paid bookings");
       }
     } catch (error) {
-      console.error("Failed to fetch bookings:", error);
-      toast.error("Failed to load bookings", {
-        description: "Please try again later.",
-      });
+      toast.error("Failed to load paid bookings");
     } finally {
-      setIsLoadingBookings(false);
+      setIsLoadingBookingsPaid(false);
     }
   };
 
@@ -405,26 +435,25 @@ export default function ProfilePage() {
         throw new Error("Failed to fetch completed bookings");
       }
     } catch (error) {
-      toast.error("Failed to load booking history");
+      toast.error("Failed to load completed bookings");
     } finally {
       setIsLoadingCompletedBookings(false);
     }
   };
 
+  // Fetch both on profile/accountId change
+  useEffect(() => {
+    if (profile?.accountId) {
+      fetchBookingsPending();
+      fetchBookingsPaid();
+    }
+  }, [profile?.accountId]);
+
+  // Fetch profile and stats on initial load
   useEffect(() => {
     fetchProfile();
     fetchStats();
   }, []);
-
-  // Fetch bookings when the tab is first shown:
-  useEffect(() => {
-    if (profile?.accountId) fetchBookings();
-  }, [profile?.accountId]);
-
-  // Fetch completed bookings when the tab is first shown:
-  useEffect(() => {
-    if (profile?.accountId) fetchCompletedBookings();
-  }, [profile?.accountId]);
 
   // Fetch tickets when profile.accountId is available
   useEffect(() => {
@@ -530,12 +559,11 @@ export default function ProfilePage() {
   }
 
   // Helper to format price as currency
-  function formatPrice(price: number) {
-    return price?.toLocaleString("en-US", {
-      style: "currency",
-      currency: "USD",
-      minimumFractionDigits: 2,
-    });
+  function formatPrice(price: number): string {
+    return new Intl.NumberFormat('vi-VN', {
+      style: 'currency',
+      currency: 'VND'
+    }).format(price);
   }
 
   return (
@@ -991,62 +1019,168 @@ export default function ProfilePage() {
 
           <TabsContent value="bookings" className="space-y-6">
             <Card>
-              <CardHeader>
-                <CardTitle>My Booked Meetings</CardTitle>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={fetchBookings}
-                  disabled={isLoadingBookings}
-                  className="ml-2"
-                >
-                  {isLoadingBookings ? (
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2"></div>
-                  ) : (
-                    <RefreshCw className="h-4 w-4 mr-2" />
-                  )}
-                  Refresh
-                </Button>
+              <CardHeader className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <CardTitle>My Booked Meetings</CardTitle>
+                  <div className="flex gap-2 ml-4">
+                    <Button
+                      variant={bookingsTab === "Pending" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setBookingsTab("Pending")}
+                    >
+                      Pending
+                    </Button>
+                    <Button
+                      variant={bookingsTab === "Paid" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setBookingsTab("Paid")}
+                    >
+                      Paid
+                    </Button>
+                  </div>
+                </div>
+                <div className="flex gap-2 mt-2 md:mt-0">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      fetchBookingsPending();
+                      fetchBookingsPaid();
+                    }}
+                    disabled={isLoadingBookingsPending || isLoadingBookingsPaid}
+                  >
+                    {(isLoadingBookingsPending || isLoadingBookingsPaid) ? (
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2"></div>
+                    ) : (
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                    )}
+                    Refresh
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent>
-                {isLoadingBookings ? (
-                  <div className="flex items-center justify-center py-8">
-                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-                  </div>
-                ) : bookings.length === 0 ? (
-                  <div className="text-center py-8">
-                    <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                    <p className="text-muted-foreground">No bookings found</p>
-                    <p className="text-sm text-muted-foreground">
-                      Your booked lawyer meetings will appear here
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-4 max-h-96 overflow-y-auto">
-                    {bookings.map((booking) => (
-                      <div
-                        key={booking.bookingId}
-                        className="border rounded-lg p-4 space-y-3"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="font-medium">
-                              {booking.lawyerName}
+                {bookingsTab === "Pending" ? (
+                  isLoadingBookingsPending ? (
+                    <div className="flex items-center justify-center py-8">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                    </div>
+                  ) : bookingsPending.length === 0 ? (
+                    <div className="text-center py-8">
+                      <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                      <p className="text-muted-foreground">No pending bookings found</p>
+                      <p className="text-sm text-muted-foreground">
+                        Your pending lawyer meetings will appear here
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4 max-h-96 overflow-y-auto">
+                      {bookingsPending.map((booking) => (
+                        <div
+                          key={booking.bookingId}
+                          className="border rounded-lg p-4 space-y-3"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <div className="font-medium">
+                                {booking.serviceName}
+                              </div>
+                              <div className="text-sm text-muted-foreground">
+                                Lawyer: {booking.lawyerName}
+                              </div>
+                              <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
+                                <span className="flex items-center gap-1">
+                                  <Calendar className="h-4 w-4" />
+                                  <span>{booking.bookingDate}</span>
+                                </span>
+                                <span className="flex items-center gap-1">
+                                  <Clock className="h-4 w-4" />
+                                  <span>
+                                    {booking.startTime} - {booking.endTime}
+                                  </span>
+                                </span>
+                                <span className="flex items-center gap-1">
+                                  <Landmark className="h-4 w-4" />
+                                  <span>{formatPrice(booking.price)}</span>
+                                </span>
+                              </div>
                             </div>
-                            <div className="text-sm text-muted-foreground">
-                              {booking.bookingDate} {booking.startTime} -{" "}
-                              {booking.endTime}
+                            <div className="flex gap-2">
+                              <Link href={`/update-booking/${booking.bookingId}`}>
+                                <Button variant="outline" size="sm">
+                                  Update
+                                </Button>
+                              </Link>
+                              <Link href={`/checkout/booking/${booking.serviceId}/${booking.lawyerId}`}>
+                                <Button variant="outline" size="sm">
+                                  Go To Checkout
+                                </Button>
+                              </Link>
                             </div>
                           </div>
-                          {/* Removed Leave Feedback button here */}
                         </div>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )
+                ) : (
+                  isLoadingBookingsPaid ? (
+                    <div className="flex items-center justify-center py-8">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                    </div>
+                  ) : bookingsPaid.length === 0 ? (
+                    <div className="text-center py-8">
+                      <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                      <p className="text-muted-foreground">No paid bookings found</p>
+                      <p className="text-sm text-muted-foreground">
+                        Your paid lawyer meetings will appear here
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4 max-h-96 overflow-y-auto">
+                      {bookingsPaid.map((booking) => (
+                        <div
+                          key={booking.bookingId}
+                          className="border rounded-lg p-4 space-y-3"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <div className="font-medium">
+                                {booking.serviceName}
+                              </div>
+                              <div className="text-sm text-muted-foreground">
+                                Lawyer: {booking.lawyerName}
+                              </div>
+                              <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
+                                <span className="flex items-center gap-1">
+                                  <Calendar className="h-4 w-4" />
+                                  <span>{booking.bookingDate}</span>
+                                </span>
+                                <span className="flex items-center gap-1">
+                                  <Clock className="h-4 w-4" />
+                                  <span>
+                                    {booking.startTime} - {booking.endTime}
+                                  </span>
+                                </span>
+                                <span className="flex items-center gap-1">
+                                  <Landmark className="h-4 w-4" />
+                                  <span>{formatPrice(booking.price)}</span>
+                                </span>
+                              </div>
+                            </div>
+                            <div className="flex gap-2">
+                              <Link href={`/update-booking/${booking.bookingId}`}>
+                                <Button variant="outline" size="sm">
+                                  Update
+                                </Button>
+                              </Link>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )
                 )}
               </CardContent>
             </Card>
-
             {/* Feedback Dialog */}
             <Dialog
               open={feedbackDialogOpen}

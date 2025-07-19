@@ -293,7 +293,7 @@ export function PurchasedFormsTab({ customerId }: PurchasedFormsTabProps) {
 
                   <div className="space-y-2">
                     {/* Edit Button - only show if form is editable */}
-                    {isEditable && (
+                    {isEditable ? (
                       <Button
                         onClick={() => handleEditForm(form)}
                         className="w-full"
@@ -303,6 +303,19 @@ export function PurchasedFormsTab({ customerId }: PurchasedFormsTabProps) {
                         <Edit className="h-4 w-4 mr-2" />
                         Edit Form
                       </Button>
+                    ) : (
+                      <div title="This form has been editted before">
+                        <Button
+                          onClick={() => toast.error("This form has already been edited and cannot be modified again.")}
+                          className="w-full text-gray-400 hover:text-gray-400 cursor-not-allowed"
+                          size="sm"
+                          variant="outline"
+                          aria-disabled="true"
+                        >
+                          <Edit className="h-4 w-4 mr-2" />
+                          Edit Form
+                        </Button>
+                      </div>
                     )}
 
                     {/* Download Button */}

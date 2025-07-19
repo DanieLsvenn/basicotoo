@@ -55,6 +55,8 @@ export function AuthGuard({
         return "/dashboard/lawyer-dashboard";
       case UserRole.STAFF:
         return "/dashboard/staff-dashboard";
+        case UserRole.MANAGER:
+        return "/dashboard";
       default:
         return "/";
     }
@@ -126,6 +128,20 @@ export function StaffOnlyGuard({
   );
 }
 
+export function ManagerOnlyGuard({
+  children,
+  fallback,
+}: {
+  children: ReactNode;
+  fallback?: ReactNode;
+}) {
+  return (
+    <AuthGuard allowedRoles={[UserRole.MANAGER, UserRole.ADMIN]} fallback={fallback}>
+      {children}
+    </AuthGuard>
+  );
+}
+
 export function AdminOnlyGuard({
   children,
   fallback,
@@ -140,7 +156,7 @@ export function AdminOnlyGuard({
   );
 }
 
-export function StaffOrLawyerGuard({
+export function EmployeeGuard({
   children,
   fallback,
 }: {
@@ -148,13 +164,13 @@ export function StaffOrLawyerGuard({
   fallback?: ReactNode;
 }) {
   return (
-    <AuthGuard allowedRoles={[UserRole.LAWYER, UserRole.STAFF, UserRole.ADMIN]} fallback={fallback}>
+    <AuthGuard allowedRoles={[UserRole.LAWYER, UserRole.STAFF, UserRole.MANAGER, UserRole.ADMIN]} fallback={fallback}>
       {children}
     </AuthGuard>
   );
 }
 
-export function BlockLawyerAndStaffAllowGuestGuard({
+export function BlockEmployeeAllowGuestGuard({
   children,
   fallback,
 }: {
@@ -163,7 +179,7 @@ export function BlockLawyerAndStaffAllowGuestGuard({
 }) {
   return (
     <AuthGuard
-      blockedRoles={[UserRole.LAWYER, UserRole.STAFF]}
+      blockedRoles={[UserRole.LAWYER, UserRole.STAFF, UserRole.MANAGER]}
       allowNoUser={true}
       fallback={fallback}
     >
@@ -172,7 +188,7 @@ export function BlockLawyerAndStaffAllowGuestGuard({
   );
 }
 
-export function BlockLawyerAndStaffGuardBlockGuest({
+export function BlockEmployeeGuardBlockGuest({
   children,
   fallback,
 }: {
@@ -181,7 +197,7 @@ export function BlockLawyerAndStaffGuardBlockGuest({
 }) {
   return (
     <AuthGuard
-      blockedRoles={[UserRole.LAWYER, UserRole.STAFF]}
+      blockedRoles={[UserRole.LAWYER, UserRole.STAFF, UserRole.MANAGER]}
       allowNoUser={false}
       fallback={fallback}
     >

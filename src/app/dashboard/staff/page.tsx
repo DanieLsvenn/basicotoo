@@ -195,10 +195,10 @@ export default function StaffPage() {
   // Update staff member
   const updateStaff = async (staffData: Staff) => {
     try {
+      // Only send staffId, fullName, gender, imageUrl
       const updateData = {
         staffId: staffData.staffId,
         fullName: staffData.fullName,
-        email: staffData.email,
         gender: staffData.gender,
         imageUrl: staffData.imageUrl,
       };
@@ -437,20 +437,7 @@ export default function StaffPage() {
                   </div>
                 </div>
 
-                {!editingStaff && (
-                  <div>
-                    <Label htmlFor="username">Username</Label>
-                    <Input
-                      id="username"
-                      value={formData.username}
-                      onChange={(e) =>
-                        setFormData({ ...formData, username: e.target.value })
-                      }
-                      required
-                    />
-                  </div>
-                )}
-
+                {/* Only show fullName and gender fields when editing */}
                 <div>
                   <Label htmlFor="fullName">Full Name</Label>
                   <Input
@@ -458,19 +445,6 @@ export default function StaffPage() {
                     value={formData.fullName}
                     onChange={(e) =>
                       setFormData({ ...formData, fullName: e.target.value })
-                    }
-                    required
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) =>
-                      setFormData({ ...formData, email: e.target.value })
                     }
                     required
                   />
@@ -495,19 +469,45 @@ export default function StaffPage() {
                   </select>
                 </div>
 
+                {/* Hide username, email, password fields when editing */}
                 {!editingStaff && (
-                  <div>
-                    <Label htmlFor="password">Password</Label>
-                    <Input
-                      id="password"
-                      type="password"
-                      value={formData.password}
-                      onChange={(e) =>
-                        setFormData({ ...formData, password: e.target.value })
-                      }
-                      required
-                    />
-                  </div>
+                  <>
+                    <div>
+                      <Label htmlFor="username">Username</Label>
+                      <Input
+                        id="username"
+                        value={formData.username}
+                        onChange={(e) =>
+                          setFormData({ ...formData, username: e.target.value })
+                        }
+                        required
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="email">Email</Label>
+                      <Input
+                        id="email"
+                        type="email"
+                        value={formData.email}
+                        onChange={(e) =>
+                          setFormData({ ...formData, email: e.target.value })
+                        }
+                        required
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="password">Password</Label>
+                      <Input
+                        id="password"
+                        type="password"
+                        value={formData.password}
+                        onChange={(e) =>
+                          setFormData({ ...formData, password: e.target.value })
+                        }
+                        required
+                      />
+                    </div>
+                  </>
                 )}
 
                 <Button

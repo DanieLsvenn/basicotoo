@@ -1,6 +1,5 @@
-import { Sidebar } from "@/components/dashboard/sidebar";
 import { AuthProvider } from "@/lib/auth-context";
-import { EmployeeGuard } from "@/lib/auth-guard";
+import { LawyerOnlyGuard } from "@/lib/auth-guard";
 
 export default function DashboardLayout({
   children,
@@ -9,14 +8,13 @@ export default function DashboardLayout({
 }) {
   return (
     <AuthProvider>
-      <EmployeeGuard>
+      <LawyerOnlyGuard>
         <div className="flex h-screen bg-gray-50">
-          <Sidebar />
           <main className="flex-1 overflow-y-auto">
             <div className="p-6">{children}</div>
           </main>
         </div>
-      </EmployeeGuard>
+      </LawyerOnlyGuard>
     </AuthProvider>
   );
 }

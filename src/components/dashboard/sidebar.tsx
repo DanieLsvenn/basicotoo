@@ -25,49 +25,55 @@ const allNavItems = [
     title: "Overview",
     href: "/dashboard",
     icon: LayoutDashboard,
-    roles: [UserRole.ADMIN, UserRole.LAWYER, UserRole.STAFF],
+    roles: [UserRole.MANAGER, UserRole.ADMIN],
   },
   {
-    title: "Staff",
-    href: "/dashboard/staff",
-    icon: IdCardLanyard,
-    roles: [UserRole.ADMIN],
+    title: "User List",
+    href: "/dashboard/user-list",
+    icon: Users,
+    roles: [UserRole.MANAGER, UserRole.ADMIN],
   },
   {
     title: "Services",
     href: "/dashboard/services",
     icon: Settings,
-    roles: [UserRole.ADMIN],
+    roles: [UserRole.MANAGER, UserRole.ADMIN],
   },
   {
     title: "Lawyers",
     href: "/dashboard/lawyers",
     icon: Scale,
-    roles: [UserRole.ADMIN],
+    roles: [UserRole.MANAGER, UserRole.ADMIN],
+  },
+  {
+    title: "Staff",
+    href: "/dashboard/staff",
+    icon: IdCardLanyard,
+    roles: [UserRole.MANAGER, UserRole.ADMIN],
   },
   {
     title: "Form Templates",
     href: "/dashboard/forms",
     icon: FileText,
-    roles: [UserRole.ADMIN],
+    roles: [UserRole.MANAGER, UserRole.ADMIN],
   },
   {
     title: "Ticket Packages",
     href: "/dashboard/tickets",
     icon: Package,
-    roles: [UserRole.ADMIN],
-  },
-  {
-    title: "View Requests",
-    href: "/dashboard/staff-dashboard",
-    icon: Archive,
-    roles: [UserRole.STAFF, UserRole.ADMIN],
+    roles: [UserRole.MANAGER, UserRole.ADMIN],
   },
   {
     title: "Schedule",
     href: "/dashboard/lawyer-dashboard",
     icon: Calendar,
     roles: [UserRole.LAWYER, UserRole.ADMIN],
+  },
+  {
+    title: "View Requests",
+    href: "/dashboard/staff-dashboard",
+    icon: Archive,
+    roles: [UserRole.STAFF, UserRole.ADMIN],
   },
   {
     title: "Check Bookings",
@@ -80,12 +86,6 @@ const allNavItems = [
     href: "/dashboard/view-feedbacks",
     icon: MessageCircleMore,
     roles: [UserRole.STAFF, UserRole.ADMIN],
-  },
-  {
-    title: "User List",
-    href: "/dashboard/user-list",
-    icon: Users,
-    roles: [UserRole.ADMIN],
   },
 ];
 
@@ -129,6 +129,28 @@ export function Sidebar() {
           );
         })}
       </nav>
+      <div className="px-6 mt-auto py-4 bg-gray-50 flex items-center gap-2 rounded-t-md border-t">
+        <span className="font-semibold text-gray-700">Login as:</span>
+        <span
+          className={
+            role === UserRole.MANAGER
+              ? "px-2 py-1 rounded bg-green-100 text-green-700 font-medium"
+              : role === UserRole.ADMIN
+                ? "px-2 py-1 rounded bg-blue-100 text-blue-700 font-medium"
+                : role === UserRole.STAFF
+                  ? "px-2 py-1 rounded bg-yellow-100 text-yellow-700 font-medium"
+                  : "px-2 py-1 rounded bg-purple-100 text-purple-700 font-medium"
+          }
+        >
+          {role === UserRole.MANAGER
+            ? "Manager"
+            : role === UserRole.ADMIN
+              ? "Admin Tối Cao"
+              : role === UserRole.STAFF
+                ? "Staff"
+                : "Lawyer"}
+        </span>
+      </div>
       <div className="p-6 mt-auto">
         <button
           onClick={logout}

@@ -989,15 +989,19 @@ const LawyerDashboard = () => {
                             s => s.fromTime === "08:00:00" && s.toTime === "12:00:00"
                           );
                           const isSelected = selectedShifts.some(s => s.startTime === "08:00:00" && s.endTime === "12:00:00");
+                          const isDateInPast = selectedDate < new Date(new Date().setHours(0, 0, 0, 0));
                           
                           return (
                             <Button
                               variant={isSelected || morningDayOffShift ? "default" : "outline"}
                               onClick={() => {
-                                if (morningShift) handleDayOffShiftClick(morningShift);
+                                if (morningShift && !isDateInPast) handleDayOffShiftClick(morningShift);
                               }}
+                              disabled={isDateInPast}
                               className={`justify-center p-4 relative ${
-                                morningDayOffShift
+                                isDateInPast
+                                  ? "opacity-50 cursor-not-allowed"
+                                  : morningDayOffShift
                                   ? morningDayOffShift.status === "WAITING"
                                     ? "bg-yellow-500 hover:bg-yellow-600 text-white"
                                     : morningDayOffShift.status === "REJECTED"
@@ -1009,6 +1013,11 @@ const LawyerDashboard = () => {
                               }`}
                             >
                               Morning Shift (8:00 AM - 12:00 PM)
+                              {isDateInPast && (
+                                <span className="text-xs text-gray-500 block">
+                                  (Past date - unavailable)
+                                </span>
+                              )}
                               {morningDayOffShift && (
                                 <Badge
                                   variant="secondary"
@@ -1029,15 +1038,19 @@ const LawyerDashboard = () => {
                             s => s.fromTime === "13:00:00" && s.toTime === "17:00:00"
                           );
                           const isSelected = selectedShifts.some(s => s.startTime === "13:00:00" && s.endTime === "17:00:00");
+                          const isDateInPast = selectedDate < new Date(new Date().setHours(0, 0, 0, 0));
                           
                           return (
                             <Button
                               variant={isSelected || eveningDayOffShift ? "default" : "outline"}
                               onClick={() => {
-                                if (eveningShift) handleDayOffShiftClick(eveningShift);
+                                if (eveningShift && !isDateInPast) handleDayOffShiftClick(eveningShift);
                               }}
+                              disabled={isDateInPast}
                               className={`justify-center p-4 relative ${
-                                eveningDayOffShift
+                                isDateInPast
+                                  ? "opacity-50 cursor-not-allowed"
+                                  : eveningDayOffShift
                                   ? eveningDayOffShift.status === "WAITING"
                                     ? "bg-yellow-500 hover:bg-yellow-600 text-white"
                                     : eveningDayOffShift.status === "REJECTED"
@@ -1049,6 +1062,11 @@ const LawyerDashboard = () => {
                               }`}
                             >
                               Evening Shift (1:00 PM - 5:00 PM)
+                              {isDateInPast && (
+                                <span className="text-xs text-gray-500 block">
+                                  (Past date - unavailable)
+                                </span>
+                              )}
                               {eveningDayOffShift && (
                                 <Badge
                                   variant="secondary"
@@ -1063,14 +1081,20 @@ const LawyerDashboard = () => {
                       </div>
 
                       {/* Register Button */}
-                      <Button
-                        onClick={registerDayOff}
-                        disabled={selectedShifts.length === 0}
-                        className="w-full mt-4"
-                        variant={selectedShifts.length > 0 ? "default" : "outline"}
-                      >
-                        Register Day Off
-                      </Button>
+                      {(() => {
+                        const isDateInPast = selectedDate < new Date(new Date().setHours(0, 0, 0, 0));
+                        
+                        return (
+                          <Button
+                            onClick={registerDayOff}
+                            disabled={selectedShifts.length === 0 || isDateInPast}
+                            className="w-full mt-4"
+                            variant={selectedShifts.length > 0 && !isDateInPast ? "default" : "outline"}
+                          >
+                            {isDateInPast ? "Cannot register for past dates" : "Register Day Off"}
+                          </Button>
+                        );
+                      })()}
 
                       {/* Response Message */}
                       {responseMessage && (
@@ -1079,15 +1103,6 @@ const LawyerDashboard = () => {
                         </div>
                       )}
 
-                      {/* Debug Refresh Button */}
-                      <Button
-                        onClick={forceRefresh}
-                        variant="outline"
-                        size="sm"
-                        className="w-full mt-2"
-                      >
-                        🔄 Refresh Day-Off Data (Debug)
-                      </Button>
                     </div>
                   </CardContent>
                 </Card>

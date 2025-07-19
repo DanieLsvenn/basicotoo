@@ -46,6 +46,12 @@ const allNavItems = [
     roles: [UserRole.MANAGER, UserRole.ADMIN],
   },
   {
+    title: "Justify Day Off",
+    href: "/dashboard/justify-dayoff",
+    icon: LayoutDashboard,
+    roles: [UserRole.MANAGER, UserRole.ADMIN],
+  },
+  {
     title: "Staff",
     href: "/dashboard/staff",
     icon: IdCardLanyard,

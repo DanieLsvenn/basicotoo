@@ -191,7 +191,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     // Store the determined role
-    Cookies.set("userRole", userRole, { expires: 7 });
+    Cookies.set("userRole", userRole, { expires: 30 });
   };
 
   const fetchUserProfile = async (token: string, role: UserRole) => {
@@ -233,12 +233,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           email: userProfile.email,
           fullName: userProfile.fullName,
           role: UserRole.USER,
+          image: userProfile.imageUrl || userProfile.image,
           accountTicketRequest: userProfile.accountTicketRequest,
         } as RegularUser;
 
         if (userProfile.accountTicketRequest) {
           Cookies.set("ticket", userProfile.accountTicketRequest.toString(), {
-            expires: 7,
+            expires: 30,
           });
         }
         break;
@@ -298,7 +299,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     console.log("Login response data:", data);
     const token = getToken(data);
 
-    Cookies.set("authToken", token, { expires: 7 });
+    Cookies.set("authToken", token, { expires: 30 });
 
     // Determine user role and fetch profile
     await setUserRoleToCookie(token);
@@ -338,8 +339,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         userName: ADMIN_USERNAME,
         role: UserRole.ADMIN,
       };
-      Cookies.set("authToken", "admin-token", { expires: 7 });
-      Cookies.set("userRole", UserRole.ADMIN, { expires: 7 });
+      Cookies.set("authToken", "admin-token", { expires: 30 });
+      Cookies.set("userRole", UserRole.ADMIN, { expires: 30 });
       setUser(adminUser);
       router.push("/");
       return;

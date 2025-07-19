@@ -13,6 +13,7 @@ import {
   Mail,
   XCircle,
   Filter,
+  Loader2,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -672,7 +673,7 @@ const LawyerDashboard = () => {
                     {/* Loading indicator */}
                     {loading && (
                       <div className="flex items-center justify-center py-4">
-                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
+                        <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
                         <span className="ml-2 text-sm">
                           Loading bookings...
                         </span>

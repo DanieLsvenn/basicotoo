@@ -3,6 +3,7 @@
 import { useAuth, UserRole } from "@/lib/auth-context";
 import { useRouter } from "next/navigation";
 import { useEffect, ReactNode } from "react";
+import { Loader2 } from "lucide-react";
 
 interface AuthGuardProps {
   children: ReactNode;
@@ -65,7 +66,7 @@ export function AuthGuard({
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
       </div>
     );
   }

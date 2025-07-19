@@ -2,7 +2,7 @@
 
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,10 +30,13 @@ import {
   CheckCircle,
   RefreshCw,
   Landmark,
+  FileText,
+  Download,
+  Edit,
+  Loader2,
+  Ticket,
 } from "lucide-react";
 import Cookies from "js-cookie";
-import { PurchasedFormsTab } from "@/components/PurchasedFormsTab";
-import { SendTicketForm } from "@/components/SendTicketForm";
 import {
   Dialog,
   DialogContent,
@@ -72,6 +75,34 @@ interface Ticket {
   status: "InProgress" | "ANSWERED";
 }
 
+// New interfaces for PurchasedFormsTab
+interface PurchasedForm {
+  customerFormId: string;
+  formTemplateId: string;
+  customerId: string;
+  status: "NOTUSED" | "USED";
+  customerFormData?: string;
+}
+
+interface FormTemplate {
+  formTemplateId: string;
+  formTemplateName: string;
+  formTemplateData: string;
+  price: number;
+  status: string;
+}
+
+interface PurchasedFormWithTemplate extends PurchasedForm {
+  template?: FormTemplate;
+}
+
+// New interfaces for SendTicketForm
+interface Service {
+  serviceId: string;
+  serviceName: string;
+  serviceDescription: string;
+}
+
 export default function ProfilePage() {
   const { user, logout } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -100,6 +131,18 @@ export default function ProfilePage() {
   const [isLoadingBookingsPending, setIsLoadingBookingsPending] = useState(false);
   const [isLoadingBookingsPaid, setIsLoadingBookingsPaid] = useState(false);
   const [bookingsTab, setBookingsTab] = useState<"Pending" | "Paid">("Pending");
+
+  // State variables for PurchasedFormsTab
+  const [purchasedForms, setPurchasedForms] = useState<PurchasedFormWithTemplate[]>([]);
+  const [isLoadingForms, setIsLoadingForms] = useState(true);
+  const [downloadingForms, setDownloadingForms] = useState<Set<string>>(new Set());
+
+  // State variables for SendTicketForm
+  const [content, setContent] = useState("");
+  const [selectedServiceId, setSelectedServiceId] = useState("");
+  const [services, setServices] = useState<Service[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoadingServices, setIsLoadingServices] = useState(true);
 
   const fetchProfile = async () => {
     try {
@@ -302,16 +345,16 @@ export default function ProfilePage() {
     setIsEditing(false);
   };
 
-  const getInitials = (name: string) => {
+  const getInitials = useCallback((name: string) => {
     return name
       .split(" ")
       .map((n) => n[0])
       .join("")
       .toUpperCase()
       .slice(0, 1);
-  };
+  }, []);
 
-  const getGenderText = (gender: number) => {
+  const getGenderText = useCallback((gender: number) => {
     switch (gender) {
       case 0:
         return "Male";
@@ -320,9 +363,9 @@ export default function ProfilePage() {
       default:
         return "Not specified";
     }
-  };
+  }, []);
 
-  const getStatusIcon = (status: string) => {
+  const getStatusIcon = useCallback((status: string) => {
     switch (status) {
       case "ANSWERED":
         return <CheckCircle className="h-4 w-4 text-green-600" />;
@@ -331,9 +374,9 @@ export default function ProfilePage() {
       default:
         return <MessageSquare className="h-4 w-4 text-gray-600" />;
     }
-  };
+  }, []);
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = useCallback((status: string) => {
     switch (status) {
       case "ANSWERED":
         return (
@@ -350,12 +393,21 @@ export default function ProfilePage() {
       default:
         return <Badge variant="secondary">{status}</Badge>;
     }
-  };
+  }, []);
 
-  const handleTicketSent = () => {
+  const handleTicketSent = useCallback(() => {
     // Refresh tickets when a new ticket is sent
     fetchTickets();
-  };
+  }, []);
+
+  // Memoized computed values
+  const userInitials = useMemo(() => {
+    return profile?.fullName ? getInitials(profile.fullName) : "";
+  }, [profile?.fullName, getInitials]);
+
+  const userGenderText = useMemo(() => {
+    return profile ? getGenderText(profile.gender) : "";
+  }, [profile?.gender, getGenderText]);
 
   const fetchBookingsPending = async () => {
     if (!profile?.accountId) return;
@@ -441,6 +493,277 @@ export default function ProfilePage() {
     }
   };
 
+  // ===== FUNCTIONS FROM PurchasedFormsTab =====
+  const fetchPurchasedFormsWithTemplates = useCallback(async () => {
+    if (!profile?.accountId) {
+      console.log("No customer ID available");
+      return;
+    }
+
+    setIsLoadingForms(true);
+    try {
+      const token = Cookies.get("authToken");
+
+      if (!token) {
+        toast.error("Please log in to view your forms");
+        return;
+      }
+
+      console.log("Fetching forms for customer:", profile.accountId);
+
+      // First, fetch purchased forms
+      const formsResponse = await fetch(
+        `https://localhost:7276/api/form/customer/${profile.accountId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (!formsResponse.ok) {
+        if (formsResponse.status === 404) {
+          console.log("No forms found for customer");
+          setPurchasedForms([]);
+          return;
+        }
+        throw new Error(`Failed to fetch forms: ${formsResponse.status}`);
+      }
+
+      const purchasedFormsData: PurchasedForm[] = await formsResponse.json();
+      console.log("Fetched purchased forms:", purchasedFormsData);
+
+      // Only fetch templates if we have forms
+      if (purchasedFormsData.length === 0) {
+        setPurchasedForms([]);
+        return;
+      }
+
+      // Then fetch templates
+      const templatesResponse = await fetch(
+        `https://localhost:7276/api/templates`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (templatesResponse.ok) {
+        const allTemplates: FormTemplate[] = await templatesResponse.json();
+        console.log("Fetched templates:", allTemplates.length);
+
+        // Create map and combine data
+        const templatesMap = new Map<string, FormTemplate>();
+        allTemplates.forEach((template) => {
+          templatesMap.set(template.formTemplateId, template);
+        });
+
+        const formsWithTemplates: PurchasedFormWithTemplate[] =
+          purchasedFormsData.map((form) => ({
+            ...form,
+            template: templatesMap.get(form.formTemplateId),
+          }));
+
+        console.log("Combined forms with templates:", formsWithTemplates);
+        setPurchasedForms(formsWithTemplates);
+      } else {
+        console.warn(
+          "Templates fetch failed, showing forms without template data"
+        );
+        setPurchasedForms(purchasedFormsData);
+        toast.error("Failed to load form template details");
+      }
+    } catch (error) {
+      console.error("Failed to fetch purchased forms:", error);
+      toast.error("Failed to load purchased forms");
+      setPurchasedForms([]); // Set empty array on error
+    } finally {
+      setIsLoadingForms(false);
+    }
+  }, [profile?.accountId]);
+
+  const handleDownloadForm = async (form: PurchasedFormWithTemplate) => {
+    const formName = form.template?.formTemplateName || "Untitled Form";
+
+    setDownloadingForms((prev) => new Set(prev).add(form.customerFormId));
+
+    try {
+      // Use the customer's form data (which might be edited) or fall back to template data
+      const contentToDownload =
+        form.customerFormData ||
+        form.template?.formTemplateData ||
+        "No content available";
+
+      await generateAndDownloadPDF(contentToDownload, formName);
+      toast.success("Form downloaded successfully");
+    } catch (error) {
+      console.error("Failed to download form:", error);
+      toast.error("Failed to download form");
+    } finally {
+      setDownloadingForms((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(form.customerFormId);
+        return newSet;
+      });
+    }
+  };
+
+  const generateAndDownloadPDF = async (
+    formContent: string,
+    formName: string
+  ) => {
+    const safeFormName = formName || "form_download";
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>${safeFormName}</title>
+          <style>
+            body { 
+              font-family: Arial, sans-serif; 
+              margin: 20px; 
+              line-height: 1.6;
+            }
+            .header { 
+              text-align: center; 
+              margin-bottom: 30px; 
+              border-bottom: 2px solid #333;
+              padding-bottom: 20px;
+            }
+            .content { 
+              line-height: 1.6; 
+            }
+            h1 { 
+              color: #333; 
+              margin-bottom: 10px;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>${safeFormName}</h1>
+          </div>
+          <div class="content">
+            ${formContent}
+          </div>
+        </body>
+      </html>
+    `;
+
+    const blob = new Blob([htmlContent], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${safeFormName.replace(/[^a-z0-9]/gi, "_")}.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleEditForm = (form: PurchasedFormWithTemplate) => {
+    // Navigate to edit page or open edit modal
+    window.location.href = `/edit-form/${form.customerFormId}`;
+  };
+
+  // ===== FUNCTIONS FROM SendTicketForm =====
+  const fetchServices = async () => {
+    try {
+      const token = Cookies.get("authToken");
+      const response = await fetch("https://localhost:7218/active-services", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setServices(data);
+        if (data.length > 0) {
+          setSelectedServiceId(data[0].serviceId);
+        }
+      } else {
+        throw new Error("Failed to fetch services");
+      }
+    } catch (error) {
+      console.error("Failed to fetch services:", error);
+      toast.error("Failed to load services", {
+        description: "Please refresh the page and try again.",
+      });
+    } finally {
+      setIsLoadingServices(false);
+    }
+  };
+
+  const handleSubmitTicket = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!selectedServiceId) {
+      toast.error("Please select a service", {
+        description: "You must select a service to send your request.",
+      });
+      return;
+    }
+
+    if (!content.trim()) {
+      toast.error("Please enter your request", {
+        description: "Your request message cannot be empty.",
+      });
+      return;
+    }
+
+    if (!profile?.accountId) {
+      toast.error("Account information not available", {
+        description: "Please refresh the page and try again.",
+      });
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const token = Cookies.get("authToken");
+
+      const response = await fetch("https://localhost:7103/api/Ticket", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          userId: profile.accountId,
+          serviceId: selectedServiceId,
+          content_Send: content,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to send ticket");
+      }
+
+      toast.success("Ticket sent successfully", {
+        description: "Staff will respond to your request soon.",
+      });
+
+      setContent("");
+      if (services.length > 0) {
+        setSelectedServiceId(services[0].serviceId);
+      }
+
+      // Refresh tickets after successful submission
+      handleTicketSent();
+    } catch (error) {
+      console.error("Failed to send ticket:", error);
+      toast.error("Error", {
+        description: "Failed to send ticket. Please try again.",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   // Fetch both on profile/accountId change
   useEffect(() => {
     if (profile?.accountId) {
@@ -461,6 +784,26 @@ export default function ProfilePage() {
       fetchTickets();
     }
   }, [profile?.accountId]);
+
+  // Fetch purchased forms when profile.accountId is available
+  useEffect(() => {
+    if (profile?.accountId) {
+      fetchPurchasedFormsWithTemplates();
+    }
+  }, [profile?.accountId, fetchPurchasedFormsWithTemplates]);
+
+  // Fetch services for ticket form on initial load
+  useEffect(() => {
+    fetchServices();
+  }, []);
+
+  // Helper to format price as currency
+  const formatPrice = useCallback((price: number): string => {
+    return new Intl.NumberFormat('vi-VN', {
+      style: 'currency',
+      currency: 'VND'
+    }).format(price);
+  }, []);
 
   // Fetch feedback for a booking
   const fetchFeedbackForBooking = async (bookingId: string) => {
@@ -536,9 +879,25 @@ export default function ProfilePage() {
 
   if (isLoading) {
     return (
-      <div className="container mx-auto py-8">
-        <div className="flex items-center justify-center min-h-[400px]">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <div className="container mx-auto py-8 px-4">
+        <div className="max-w-4xl mx-auto space-y-8">
+          {/* Header Skeleton */}
+          <div className="flex items-center justify-between">
+            <div className="space-y-2">
+              <div className="h-8 bg-gray-200 rounded-md w-32 animate-pulse"></div>
+              <div className="h-4 bg-gray-200 rounded-md w-64 animate-pulse"></div>
+            </div>
+            <div className="h-10 bg-gray-200 rounded-md w-20 animate-pulse"></div>
+          </div>
+
+          {/* Tabs Skeleton */}
+          <div className="space-y-6">
+            <div className="h-10 bg-gray-200 rounded-md w-full animate-pulse"></div>
+            <div className="space-y-4">
+              <div className="h-32 bg-gray-200 rounded-md w-full animate-pulse"></div>
+              <div className="h-24 bg-gray-200 rounded-md w-full animate-pulse"></div>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -556,14 +915,6 @@ export default function ProfilePage() {
         </Card>
       </div>
     );
-  }
-
-  // Helper to format price as currency
-  function formatPrice(price: number): string {
-    return new Intl.NumberFormat('vi-VN', {
-      style: 'currency',
-      currency: 'VND'
-    }).format(price);
   }
 
   return (
@@ -603,7 +954,7 @@ export default function ProfilePage() {
                         alt={profile.fullName}
                       />
                       <AvatarFallback className="text-lg font-semibold">
-                        {getInitials(profile.fullName)}
+                        {userInitials}
                       </AvatarFallback>
                     </Avatar>
                     <div className="absolute -bottom-2 -right-2">
@@ -624,7 +975,7 @@ export default function ProfilePage() {
                         disabled={isUploadingImage}
                       >
                         {isUploadingImage ? (
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current"></div>
+                          <Loader2 className="h-4 w-4 animate-spin" />
                         ) : (
                           <Camera className="h-4 w-4" />
                         )}
@@ -806,7 +1157,7 @@ export default function ProfilePage() {
                       </select>
                     ) : (
                       <p className="text-sm py-2">
-                        {getGenderText(profile.gender)}
+                        {userGenderText}
                       </p>
                     )}
                   </div>
@@ -926,7 +1277,135 @@ export default function ProfilePage() {
           </TabsContent>
 
           <TabsContent value="forms" className="space-y-6">
-            <PurchasedFormsTab customerId={profile.accountId} />
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold">Your Purchased Forms</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Edit and download your purchased form templates. Forms can be edited
+                    once before finalization.
+                  </p>
+                </div>
+                <Badge variant="outline">
+                  {purchasedForms.length} form{purchasedForms.length !== 1 ? "s" : ""}
+                </Badge>
+              </div>
+
+              {isLoadingForms ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin mr-2" />
+                  <span>Loading your forms...</span>
+                </div>
+              ) : purchasedForms.length === 0 ? (
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="text-center py-8">
+                      <FileText className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                      <h4 className="text-lg font-semibold text-gray-600 mb-2">
+                        No forms purchased yet
+                      </h4>
+                      <p className="text-gray-500 mb-4">
+                        Browse our services to find and purchase form templates.
+                      </p>
+                      <Button asChild>
+                        <Link href="/services">Browse Services</Link>
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {purchasedForms.map((form) => {
+                    const formName = form.template?.formTemplateName || "Untitled Form";
+                    const isEditable = form.status === "NOTUSED";
+
+                    return (
+                      <Card
+                        key={form.customerFormId}
+                        className="hover:shadow-md transition-shadow"
+                      >
+                        <CardContent className="p-4">
+                          <div className="flex items-start justify-between mb-3">
+                            <h4 className="font-semibold text-gray-900 truncate">
+                              {formName}
+                            </h4>
+                            <Badge
+                              variant={isEditable ? "default" : "secondary"}
+                              className="ml-2"
+                            >
+                              {isEditable ? "Editable" : "Used"}
+                            </Badge>
+                          </div>
+
+                          {form.template && (
+                            <div className="mb-3">
+                              <p className="text-xs text-gray-500 mb-1 flex items-center gap-1">
+                                Price: <Ticket className="w-4 h-4 text-amber-600" /> {form.template.price}
+                              </p>
+                              <p className="text-xs text-gray-400">
+                                Status: {form.template.status}
+                              </p>
+                            </div>
+                          )}
+
+                          <div className="text-xs text-gray-400 mb-4 truncate">
+                            Form ID: {form.customerFormId}
+                          </div>
+
+                          <div className="space-y-2">
+                            {/* Edit Button - only show if form is editable */}
+                            {isEditable ? (
+                              <Button
+                                onClick={() => handleEditForm(form)}
+                                className="w-full"
+                                size="sm"
+                                variant="outline"
+                              >
+                                <Edit className="h-4 w-4 mr-2" />
+                                Edit Form
+                              </Button>
+                            ) : (
+                              <div title="This form has been editted before">
+                                <Button
+                                  onClick={() => toast.error("This form has already been edited and cannot be modified again.")}
+                                  className="w-full text-gray-400 hover:text-gray-400 cursor-not-allowed"
+                                  size="sm"
+                                  variant="outline"
+                                  aria-disabled="true"
+                                >
+                                  <Edit className="h-4 w-4 mr-2" />
+                                  Edit Form
+                                </Button>
+                              </div>
+                            )}
+
+                            {/* Download Button */}
+                            <Button
+                              onClick={() => handleDownloadForm(form)}
+                              disabled={downloadingForms.has(form.customerFormId)}
+                              className="w-full"
+                              size="sm"
+                            >
+                              {downloadingForms.has(form.customerFormId) ? (
+                                <>
+                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                  Downloading...
+                                </>
+                              ) : (
+                                <>
+                                  <Download className="h-4 w-4 mr-2" />
+                                  Download
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </TabsContent>
 
           <TabsContent value="tickets" className="space-y-6">
@@ -937,7 +1416,82 @@ export default function ProfilePage() {
                   <CardTitle>Send Support Request</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <SendTicketForm onTicketSent={handleTicketSent} />
+                  <div className="space-y-4">
+                    {profile && (
+                      <div className="text-sm text-muted-foreground p-3 border rounded-md bg-muted/50">
+                        Logged in as:{" "}
+                        <span className="font-medium">{profile.fullName}</span> (
+                        {profile.username})
+                      </div>
+                    )}
+
+                    {isLoadingServices ? (
+                      <div className="flex items-center justify-center py-8">
+                        <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+                        <span className="ml-2 text-sm text-muted-foreground">Loading...</span>
+                      </div>
+                    ) : (
+                      <form onSubmit={handleSubmitTicket} className="space-y-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="service">Select Service</Label>
+                          {services.length > 0 ? (
+                            <select
+                              id="service"
+                              value={selectedServiceId}
+                              onChange={(e) => setSelectedServiceId(e.target.value)}
+                              required
+                              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              <option value="">-- Select a service --</option>
+                              {services.map((service) => (
+                                <option key={service.serviceId} value={service.serviceId}>
+                                  {service.serviceName}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <div className="text-sm text-muted-foreground p-3 border rounded-md bg-muted/50">
+                              No active services available at the moment.
+                            </div>
+                          )}
+                        </div>
+
+                        {selectedServiceId && (
+                          <div className="space-y-2">
+                            <Label>Service Details</Label>
+                            <div className="text-sm text-muted-foreground p-3 border rounded-md bg-muted/50">
+                              {services.find((s) => s.serviceId === selectedServiceId)
+                                ?.serviceDescription || "No description available"}
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="space-y-2">
+                          <Label htmlFor="request">Your Request</Label>
+                          <Textarea
+                            id="request"
+                            value={content}
+                            onChange={(e) => setContent(e.target.value)}
+                            placeholder="Type your question or request here..."
+                            required
+                            rows={4}
+                          />
+                        </div>
+
+                        <Button
+                          type="submit"
+                          disabled={
+                            isSubmitting ||
+                            !selectedServiceId ||
+                            services.length === 0 ||
+                            !profile
+                          }
+                        >
+                          {isSubmitting ? "Sending..." : "Send Request"}
+                        </Button>
+                      </form>
+                    )}
+                  </div>
                 </CardContent>
               </Card>
 
@@ -952,7 +1506,7 @@ export default function ProfilePage() {
                     disabled={isLoadingTickets}
                   >
                     {isLoadingTickets ? (
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2"></div>
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
                     ) : (
                       <RefreshCw className="h-4 w-4 mr-2" />
                     )}
@@ -962,7 +1516,7 @@ export default function ProfilePage() {
                 <CardContent>
                   {isLoadingTickets ? (
                     <div className="flex items-center justify-center py-8">
-                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                      <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
                     </div>
                   ) : tickets.length === 0 ? (
                     <div className="text-center py-8">
@@ -1050,7 +1604,7 @@ export default function ProfilePage() {
                     disabled={isLoadingBookingsPending || isLoadingBookingsPaid}
                   >
                     {(isLoadingBookingsPending || isLoadingBookingsPaid) ? (
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2"></div>
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
                     ) : (
                       <RefreshCw className="h-4 w-4 mr-2" />
                     )}
@@ -1062,7 +1616,7 @@ export default function ProfilePage() {
                 {bookingsTab === "Pending" ? (
                   isLoadingBookingsPending ? (
                     <div className="flex items-center justify-center py-8">
-                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                      <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
                     </div>
                   ) : bookingsPending.length === 0 ? (
                     <div className="text-center py-8">
@@ -1124,7 +1678,7 @@ export default function ProfilePage() {
                 ) : (
                   isLoadingBookingsPaid ? (
                     <div className="flex items-center justify-center py-8">
-                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                      <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
                     </div>
                   ) : bookingsPaid.length === 0 ? (
                     <div className="text-center py-8">
@@ -1237,7 +1791,7 @@ export default function ProfilePage() {
                   className="ml-2"
                 >
                   {isLoadingCompletedBookings ? (
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2"></div>
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
                   ) : (
                     <RefreshCw className="h-4 w-4 mr-2" />
                   )}
@@ -1247,7 +1801,7 @@ export default function ProfilePage() {
               <CardContent>
                 {isLoadingCompletedBookings ? (
                   <div className="flex items-center justify-center py-8">
-                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                    <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
                   </div>
                 ) : completedBookings.length === 0 ? (
                   <div className="text-center py-8">

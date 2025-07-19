@@ -3,7 +3,7 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import {
   Loader2,
   ArrowLeft,
@@ -19,7 +19,8 @@ import {
   Ticket,
   Plus,
   Minus,
-  MessageCircleMore
+  MessageCircleMore,
+  RefreshCw
 } from "lucide-react";
 import { MaxWidthWrapper } from "@/components/max-width-wrapper";
 import { Button } from "@/components/ui/button";
@@ -175,6 +176,17 @@ function parseCheckoutParams(params: string[]): CheckoutMode | null {
   return null;
 }
 
+function isBookingExpired(bookingDate: string): boolean {
+  const today = new Date();
+  const booking = new Date(bookingDate + 'T00:00:00'); // Ensure consistent timezone
+  
+  // Set both dates to start of day for fair comparison
+  today.setHours(0, 0, 0, 0);
+  booking.setHours(0, 0, 0, 0);
+  
+  return booking <= today;
+}
+
 function areTimeSlotsConsecutive(slots: Slot[], selectedSlotIds: string[]): boolean {
   if (selectedSlotIds.length <= 1) return true;
 
@@ -263,6 +275,11 @@ export default function CheckoutPage() {
   const [pendingOrders, setPendingOrders] = useState<PendingOrder[]>([]);
   const [cancellingOrders, setCancellingOrders] = useState<Set<string>>(new Set());
 
+  // Manual refresh states
+  const [refreshingBookings, setRefreshingBookings] = useState(false);
+  const [refreshingOrders, setRefreshingOrders] = useState(false);
+  const [refreshingSlots, setRefreshingSlots] = useState(false);
+
   // Fetch user profile
   const fetchProfile = useCallback(async () => {
     try {
@@ -329,10 +346,67 @@ export default function CheckoutPage() {
 
       if (response.ok) {
         const data: PendingBooking[] = await response.json();
-        setPendingBookings(data);
+        
+        // Filter out expired bookings and auto-cancel them
+        const validBookings: PendingBooking[] = [];
+        const expiredBookings: PendingBooking[] = [];
+        
+        data.forEach(booking => {
+          if (isBookingExpired(booking.bookingDate)) {
+            expiredBookings.push(booking);
+          } else {
+            validBookings.push(booking);
+          }
+        });
+        
+        // Auto-cancel expired bookings in the background
+        if (expiredBookings.length > 0) {
+          console.log(`Found ${expiredBookings.length} expired booking(s), auto-cancelling...`);
+          
+          // Cancel expired bookings without blocking the UI
+          const cancellationPromises = expiredBookings.map(async (expiredBooking) => {
+            try {
+              const token = Cookies.get("authToken");
+              if (!token) return { success: false, bookingId: expiredBooking.bookingId, error: "No auth token" };
+              
+              const response = await fetch(`https://localhost:7286/api/Booking/${expiredBooking.bookingId}`, {
+                method: "DELETE",
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                },
+              });
+              
+              if (response.ok) {
+                console.log(`Auto-cancelled expired booking: ${expiredBooking.bookingId} (Date: ${expiredBooking.bookingDate})`);
+                return { success: true, bookingId: expiredBooking.bookingId };
+              } else {
+                throw new Error(`HTTP ${response.status}`);
+              }
+            } catch (error) {
+              console.error(`Failed to auto-cancel expired booking ${expiredBooking.bookingId}:`, error);
+              return { success: false, bookingId: expiredBooking.bookingId, error };
+            }
+          });
+          
+          // Process cancellation results
+          Promise.all(cancellationPromises).then((results) => {
+            const successful = results.filter(r => r.success).length;
+            const failed = results.filter(r => !r.success).length;
+            
+            if (successful > 0) {
+              toast.success(`Cleaned up ${successful} expired booking(s)`);
+            }
+            if (failed > 0) {
+              console.warn(`Failed to cancel ${failed} expired booking(s)`);
+            }
+          });
+        }
+        
+        // Set only valid (non-expired) bookings
+        setPendingBookings(validBookings);
 
         // Check if there's a pending booking for this service and lawyer
-        const matchingBooking = data.find(
+        const matchingBooking = validBookings.find(
           booking => booking.serviceId === serviceId && booking.lawyerId === lawyerId
         );
 
@@ -345,8 +419,8 @@ export default function CheckoutPage() {
     }
   }, [profile?.accountId, serviceId, lawyerId, mode]);
 
-  const handleCancelBooking = async (bookingId: string) => {
-    setCancellingBookings(prev => new Set([...prev, bookingId]));
+  const handleCancelBooking = async (cancelBookingId: string) => {
+    setCancellingBookings(prev => new Set([...prev, cancelBookingId]));
 
     try {
       const token = Cookies.get("authToken");
@@ -355,7 +429,7 @@ export default function CheckoutPage() {
         return;
       }
 
-      const response = await fetch(`https://localhost:7286/api/Booking/${bookingId}`, {
+      const response = await fetch(`https://localhost:7286/api/Booking/${cancelBookingId}`, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -364,7 +438,12 @@ export default function CheckoutPage() {
 
       if (response.ok) {
         toast.success("Booking cancelled successfully");
-        await fetchPendingBookings();
+        // Instantly update UI by removing the cancelled booking from state
+        setPendingBookings(prev => prev.filter(booking => booking.bookingId !== cancelBookingId));
+        // Also update the bookingId if this was the current booking
+        if (cancelBookingId === bookingId) {
+          setBookingId(null);
+        }
       } else {
         const errorData = await response.json();
         throw new Error(errorData.message || "Failed to cancel booking");
@@ -375,7 +454,7 @@ export default function CheckoutPage() {
     } finally {
       setCancellingBookings(prev => {
         const newSet = new Set(prev);
-        newSet.delete(bookingId);
+        newSet.delete(cancelBookingId);
         return newSet;
       });
     }
@@ -457,8 +536,6 @@ export default function CheckoutPage() {
     });
   };
 
-  const areSelectedSlotsConsecutive = areTimeSlotsConsecutive(availableSlots, selectedSlots);
-
   // Ticket-specific functions
   const fetchTicketPackage = useCallback(async () => {
     if (mode !== "ticket") return;
@@ -525,7 +602,8 @@ export default function CheckoutPage() {
 
       if (response.ok) {
         toast.success("Order cancelled successfully");
-        await fetchPendingOrders();
+        // Instantly update UI by removing the cancelled order from state
+        setPendingOrders(prev => prev.filter(order => order.orderId !== orderId));
       } else {
         const errorData = await response.json();
         throw new Error(errorData.message || "Failed to cancel order");
@@ -545,6 +623,46 @@ export default function CheckoutPage() {
   const handleQuantityChange = (delta: number) => {
     setQuantity(prev => Math.max(1, prev + delta));
   };
+
+  // Manual refresh functions
+  const handleRefreshBookings = useCallback(async () => {
+    if (mode !== "booking") return;
+    setRefreshingBookings(true);
+    try {
+      await fetchPendingBookings();
+      toast.success("Bookings refreshed");
+    } catch (error) {
+      toast.error("Failed to refresh bookings");
+    } finally {
+      setRefreshingBookings(false);
+    }
+  }, [mode, fetchPendingBookings]);
+
+  const handleRefreshOrders = useCallback(async () => {
+    if (mode !== "ticket") return;
+    setRefreshingOrders(true);
+    try {
+      await fetchPendingOrders();
+      toast.success("Orders refreshed");
+    } catch (error) {
+      toast.error("Failed to refresh orders");
+    } finally {
+      setRefreshingOrders(false);
+    }
+  }, [mode, fetchPendingOrders]);
+
+  const handleRefreshSlots = useCallback(async () => {
+    if (mode !== "booking" || !selectedDate) return;
+    setRefreshingSlots(true);
+    try {
+      await fetchAvailableSlots(selectedDate);
+      toast.success("Available slots refreshed");
+    } catch (error) {
+      toast.error("Failed to refresh slots");
+    } finally {
+      setRefreshingSlots(false);
+    }
+  }, [mode, selectedDate, fetchAvailableSlots]);
 
   // Handle booking creation
   const handleBooking = async () => {
@@ -724,18 +842,30 @@ export default function CheckoutPage() {
     }
   };
 
-  // Calculate totals
-  const totalPrice = mode === "booking"
-    ? (lawyer ? lawyer.pricePerHour * selectedSlots.length : 0)
-    : (ticketPackage ? ticketPackage.price * quantity : 0);
+  // Optimized calculated values with useMemo
+  const totalPrice = useMemo(() => {
+    return mode === "booking"
+      ? (lawyer ? lawyer.pricePerHour * selectedSlots.length : 0)
+      : (ticketPackage ? ticketPackage.price * quantity : 0);
+  }, [mode, lawyer?.pricePerHour, selectedSlots.length, ticketPackage?.price, quantity]);
 
-  const currentPendingBooking = mode === "booking"
-    ? pendingBookings.find(booking => booking.serviceId === serviceId && booking.lawyerId === lawyerId)
-    : null;
+  const currentPendingBooking = useMemo(() => {
+    return mode === "booking"
+      ? pendingBookings.find(booking => booking.serviceId === serviceId && booking.lawyerId === lawyerId)
+      : null;
+  }, [mode, pendingBookings, serviceId, lawyerId]);
 
-  const currentPendingOrder = mode === "ticket"
-    ? pendingOrders.find(order => order.orderDetails.some(detail => detail.ticketPackageId === ticketPackageId))
-    : null;
+  const currentPendingOrder = useMemo(() => {
+    return mode === "ticket"
+      ? pendingOrders.find(order => order.orderDetails.some(detail => detail.ticketPackageId === ticketPackageId))
+      : null;
+  }, [mode, pendingOrders, ticketPackageId]);
+
+  // Memoized slot validation
+  const areSelectedSlotsConsecutive = useMemo(() => 
+    areTimeSlotsConsecutive(availableSlots, selectedSlots),
+    [availableSlots, selectedSlots]
+  );
 
   // Initialize data
   useEffect(() => {
@@ -756,16 +886,12 @@ export default function CheckoutPage() {
   useEffect(() => {
     if (mode === "booking" && selectedDate && lawyerId) {
       fetchAvailableSlots(selectedDate);
-      const interval = setInterval(() => fetchAvailableSlots(selectedDate), 20000);
-      return () => clearInterval(interval);
     }
   }, [selectedDate, lawyerId, fetchAvailableSlots, mode]);
 
   useEffect(() => {
     if (mode === "booking" && profile?.accountId) {
       fetchPendingBookings();
-      const interval = setInterval(fetchPendingBookings, 20000);
-      return () => clearInterval(interval);
     }
   }, [fetchPendingBookings, profile?.accountId, mode]);
 
@@ -779,8 +905,6 @@ export default function CheckoutPage() {
   useEffect(() => {
     if (mode === "ticket" && profile?.accountId) {
       fetchPendingOrders();
-      const interval = setInterval(fetchPendingOrders, 20000);
-      return () => clearInterval(interval);
     }
   }, [fetchPendingOrders, profile?.accountId, mode]);
 
@@ -961,7 +1085,7 @@ export default function CheckoutPage() {
                     <div className="flex items-center gap-4">
                       <div className="flex-1">
                         <h4 className="font-medium text-orange-900">
-                          Order #{order.orderId.slice(-8)}
+                          Order #{order.orderId}
                         </h4>
                         <p className="text-sm text-orange-700">
                           {order.orderDetails.reduce((sum, detail) => sum + detail.quantity, 0)} package(s)
@@ -970,7 +1094,7 @@ export default function CheckoutPage() {
                           <span className="flex items-center gap-1">
                             <Package className="h-4 w-4" />
                             <span>
-                              {order.orderDetails.reduce((sum, detail) => sum + detail.quantity, 0)} packages
+                              {order.orderDetails.reduce((sum, detail) => sum + detail.quantity, 0)} package(s)
                             </span>
                           </span>
                           <span className="flex items-center gap-1">

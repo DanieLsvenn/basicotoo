@@ -4,6 +4,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useAuth } from "@/lib/auth-context";
+import html2pdf from "html2pdf.js";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -527,29 +528,83 @@ export default function ProfilePage() {
   ) => {
     const safeFormName = formName || "form_download";
 
-    const htmlContent = `
-      <!DOCTYPE html>
-      <html>
+    // Strip out ALL HTML tags and just convert to plain text with basic formatting
+    const convertToPlainText = (content: string): string => {
+      return content
+        // Remove all HTML tags but preserve some structure
+        .replace(/<h[1-6][^>]*>/gi, '\n\n--- ')
+        .replace(/<\/h[1-6]>/gi, ' ---\n')
+        .replace(/<p[^>]*>/gi, '\n')
+        .replace(/<\/p>/gi, '\n')
+        .replace(/<br[^>]*>/gi, '\n')
+        .replace(/<div[^>]*>/gi, '\n')
+        .replace(/<\/div>/gi, '\n')
+        .replace(/<li[^>]*>/gi, '\n• ')
+        .replace(/<\/li>/gi, '')
+        .replace(/<[^>]*>/g, '') // Remove all remaining HTML tags
+        .replace(/&nbsp;/g, ' ')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        // Clean up excessive whitespace
+        .replace(/\n\s*\n\s*\n/g, '\n\n')
+        .replace(/^\s+|\s+$/g, '')
+        .trim();
+    };
+
+    const plainTextContent = convertToPlainText(formContent);
+
+    // Try popup window approach first
+    try {
+      console.log('Attempting popup window PDF generation...');
+      const newWindow = window.open('', '_blank', 'width=800,height=600,scrollbars=yes,resizable=yes');
+      if (!newWindow) {
+        throw new Error('Popup blocked');
+      }
+
+      // Write a completely clean HTML document with no external references
+      newWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
         <head>
-          <title>${safeFormName}</title>
+          <meta charset="utf-8">
+          <title>PDF Generation</title>
           <style>
-            body { 
-              font-family: Arial, sans-serif; 
-              margin: 20px; 
+            * {
+              margin: 0;
+              padding: 0;
+              box-sizing: border-box;
+            }
+            body {
+              font-family: Arial, sans-serif;
+              font-size: 12px;
               line-height: 1.6;
+              color: #000000;
+              background-color: #ffffff;
+              padding: 15mm;
+              width: 210mm;
+              box-sizing: border-box;
             }
-            .header { 
-              text-align: center; 
-              margin-bottom: 30px; 
-              border-bottom: 2px solid #333;
-              padding-bottom: 20px;
+            .header {
+              text-align: center;
+              margin-bottom: 20px;
+              border-bottom: 2px solid #000000;
+              padding-bottom: 15px;
             }
-            .content { 
-              line-height: 1.6; 
-            }
-            h1 { 
-              color: #333; 
+            .header h1 {
+              font-size: 24px;
+              font-weight: bold;
+              color: #000000;
               margin-bottom: 10px;
+            }
+            .content {
+              white-space: pre-wrap;
+              word-wrap: break-word;
+              font-size: 12px;
+              line-height: 1.8;
+              color: #000000;
             }
           </style>
         </head>
@@ -557,22 +612,200 @@ export default function ProfilePage() {
           <div class="header">
             <h1>${safeFormName}</h1>
           </div>
-          <div class="content">
-            ${formContent}
-          </div>
+          <div class="content">${plainTextContent}</div>
+          
+          <script>
+            console.log('PDF generation document loaded');
+          </script>
         </body>
-      </html>
-    `;
+        </html>
+      `);
+      newWindow.document.close();
 
-    const blob = new Blob([htmlContent], { type: "text/html" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${safeFormName.replace(/[^a-z0-9]/gi, "_")}.html`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+      // Wait for the document to be ready
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Import html2pdf in the new window context
+      const script = newWindow.document.createElement('script');
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+      
+      await new Promise((resolve, reject) => {
+        script.onload = () => {
+          console.log('html2pdf script loaded successfully');
+          resolve(true);
+        };
+        script.onerror = (error) => {
+          console.error('Failed to load html2pdf script:', error);
+          reject(error);
+        };
+        newWindow.document.head.appendChild(script);
+      });
+
+      // Wait for html2pdf to be available
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Generate PDF in the isolated window
+      const html2pdfLib = (newWindow as any).html2pdf;
+      if (!html2pdfLib) {
+        throw new Error('html2pdf library failed to load in isolated window');
+      }
+
+      console.log('Generating PDF with html2pdf...');
+      const options = {
+        margin: 5, // Use single value instead of array
+        filename: `${safeFormName.replace(/[^a-z0-9]/gi, "_")}.pdf`,
+        html2canvas: {
+          scale: 2,
+          backgroundColor: '#ffffff',
+          useCORS: false,
+          allowTaint: true,
+          logging: false
+          // Let html2canvas calculate optimal height automatically
+        },
+        jsPDF: {
+          unit: 'mm',
+          format: 'a4',
+          orientation: 'portrait',
+          compress: true
+        },
+        pagebreak: { 
+          mode: ['avoid-all', 'css', 'legacy'],
+          before: '.page-break-before',
+          after: '.page-break-after',
+          avoid: '.no-page-break'
+        }
+      };
+
+      await html2pdfLib()
+        .from(newWindow.document.body)
+        .set(options)
+        .save();
+
+      console.log('PDF generated successfully!');
+      
+      // Clean up: close the popup window
+      setTimeout(() => {
+        newWindow.close();
+      }, 2000);
+
+    } catch (popupError) {
+      console.log('Popup approach failed:', popupError);
+      console.log('Trying local html2pdf fallback...');
+      
+      // Fallback 1: Try using local html2pdf with DOM manipulation instead of iframe
+      try {
+        console.log('Trying direct DOM approach with local html2pdf...');
+        
+        // Create a temporary div to hold our content
+        const tempDiv = document.createElement('div');
+        tempDiv.style.position = 'absolute';
+        tempDiv.style.left = '-9999px';
+        tempDiv.style.top = '-9999px';
+        tempDiv.style.width = '210mm';
+        tempDiv.style.visibility = 'hidden';
+        
+        // Add styles and content directly to the div
+        tempDiv.innerHTML = `
+          <style>
+            .pdf-container {
+              font-family: Arial, sans-serif;
+              font-size: 12px;
+              line-height: 1.6;
+              color: #000;
+              background: #fff;
+              padding: 15mm;
+              box-sizing: border-box;
+            }
+            .pdf-header {
+              text-align: center;
+              margin-bottom: 15px;
+              border-bottom: 1px solid #000;
+              padding-bottom: 8px;
+            }
+            .pdf-header h1 {
+              font-size: 18px;
+              margin: 0 0 5px 0;
+              font-weight: bold;
+            }
+            .pdf-header p {
+              font-size: 10px;
+              margin: 0;
+              color: #666;
+            }
+            .pdf-content {
+              white-space: pre-wrap;
+              word-wrap: break-word;
+              font-size: 12px;
+            }
+          </style>
+          <div class="pdf-container">
+            <div class="pdf-header">
+              <h1>${safeFormName}</h1>
+              <p>Generated on ${new Date().toLocaleDateString()}</p>
+            </div>
+            <div class="pdf-content">${plainTextContent}</div>
+          </div>
+        `;
+        
+        document.body.appendChild(tempDiv);
+        
+        // Wait a moment for styles to apply
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        const options = {
+          margin: 5, // Use single value instead of array
+          filename: `${safeFormName.replace(/[^a-z0-9]/gi, "_")}.pdf`,
+          html2canvas: {
+            scale: 2,
+            backgroundColor: '#ffffff',
+            useCORS: false,
+            allowTaint: true,
+            logging: false
+          },
+          jsPDF: {
+            unit: 'mm',
+            format: 'a4',
+            orientation: 'portrait' as const,
+            compress: true
+          },
+          pagebreak: { 
+            mode: ['avoid-all', 'css', 'legacy'],
+            avoid: '.no-page-break'
+          }
+        };
+
+        console.log('Generating PDF from DOM element...');
+        await html2pdf().from(tempDiv).set(options).save();
+        console.log('PDF generated successfully from DOM element!');
+        
+        document.body.removeChild(tempDiv);
+
+      } catch (domError) {
+        console.error('DOM approach also failed:', domError);
+        console.log('Falling back to text file download...');
+        
+        // Fallback 2: Create a simple text file download
+        const textContent = `
+${safeFormName}
+Generated on ${new Date().toLocaleDateString()}
+
+${plainTextContent}
+        `.trim();
+
+        const blob = new Blob([textContent], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${safeFormName.replace(/[^a-z0-9]/gi, "_")}.txt`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        // Show a helpful message to the user
+        throw new Error('PDF generation not supported in this browser. Form downloaded as text file instead.');
+      }
+    }
   };
 
   const handleEditForm = (form: PurchasedFormWithTemplate) => {

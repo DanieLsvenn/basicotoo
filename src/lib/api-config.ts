@@ -124,6 +124,7 @@ export const API_ENDPOINTS = {
     CREATE_FORM: `${API_BASES.ORDER}/api/order/create-form`,
     TICKET_PACKAGE: `${API_BASES.ORDER}/api/order/ticket-package`,
     PAYMENT_URL: `${API_BASES.ORDER}/api/Payment/create-payment-url`,
+    PAYMENT_CALLBACK: `${typeof window !== 'undefined' ? window.location.origin : 'https://localhost:3000'}/api/payment/payment-callback`,
   },
 
   // Dashboard endpoints

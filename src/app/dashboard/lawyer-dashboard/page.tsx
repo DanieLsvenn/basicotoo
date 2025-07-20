@@ -384,6 +384,34 @@ const LawyerDashboard = () => {
     return statusIndicator !== "none" && Array.isArray(statusIndicator) && statusIndicator.length > 0;
   }, [getDayOffStatusIndicator, refreshTrigger]);
 
+  const hasBookingConflict = useCallback((date: Date, shiftStartTime: string, shiftEndTime: string) => {
+    const formattedDate = formatDate(date);
+    const dateBookings = allBookings.filter(
+      (booking) => booking.bookingDate === formattedDate && 
+      (booking.status === "Pending" || booking.status === "Paid")
+    );
+
+    return dateBookings.some((booking) => {
+      const bookingStart = booking.startTime;
+      const bookingEnd = booking.endTime;
+      
+      // Check if booking time overlaps with shift time
+      // Convert times to minutes for easier comparison
+      const timeToMinutes = (timeStr: string) => {
+        const [hours, minutes] = timeStr.split(':').map(Number);
+        return hours * 60 + minutes;
+      };
+
+      const shiftStart = timeToMinutes(shiftStartTime);
+      const shiftEnd = timeToMinutes(shiftEndTime);
+      const bookingStartMin = timeToMinutes(bookingStart);
+      const bookingEndMin = timeToMinutes(bookingEnd);
+
+      // Check for overlap: booking starts before shift ends AND booking ends after shift starts
+      return bookingStartMin < shiftEnd && bookingEndMin > shiftStart;
+    });
+  }, [allBookings]);
+
   const handleDayOffShiftClick = (shift: Shift) => {
     const dayOff = getDayOffForDate(selectedDate);
     if (!dayOff) {
@@ -935,16 +963,18 @@ const LawyerDashboard = () => {
                           );
                           const isSelected = selectedShifts.some(s => s.startTime === "08:00:00" && s.endTime === "12:00:00");
                           const isDateInPast = selectedDate < new Date(new Date().setHours(0, 0, 0, 0));
+                          const hasConflict = hasBookingConflict(selectedDate, "08:00:00", "12:00:00");
+                          const isDisabled = isDateInPast || hasConflict;
                           
                           return (
                             <Button
                               variant={isSelected || morningDayOffShift ? "default" : "outline"}
                               onClick={() => {
-                                if (morningShift && !isDateInPast) handleDayOffShiftClick(morningShift);
+                                if (morningShift && !isDisabled) handleDayOffShiftClick(morningShift);
                               }}
-                              disabled={isDateInPast}
+                              disabled={isDisabled}
                               className={`justify-center p-4 relative ${
-                                isDateInPast
+                                isDisabled
                                   ? "opacity-50 cursor-not-allowed"
                                   : morningDayOffShift
                                   ? morningDayOffShift.status === "WAITING"
@@ -961,6 +991,11 @@ const LawyerDashboard = () => {
                               {isDateInPast && (
                                 <span className="text-xs text-gray-500 block">
                                   (Past date - unavailable)
+                                </span>
+                              )}
+                              {hasConflict && !isDateInPast && (
+                                <span className="text-xs text-gray-500 block">
+                                  (Booking conflict - unavailable)
                                 </span>
                               )}
                               {morningDayOffShift && (
@@ -984,16 +1019,18 @@ const LawyerDashboard = () => {
                           );
                           const isSelected = selectedShifts.some(s => s.startTime === "13:00:00" && s.endTime === "17:00:00");
                           const isDateInPast = selectedDate < new Date(new Date().setHours(0, 0, 0, 0));
+                          const hasConflict = hasBookingConflict(selectedDate, "13:00:00", "17:00:00");
+                          const isDisabled = isDateInPast || hasConflict;
                           
                           return (
                             <Button
                               variant={isSelected || eveningDayOffShift ? "default" : "outline"}
                               onClick={() => {
-                                if (eveningShift && !isDateInPast) handleDayOffShiftClick(eveningShift);
+                                if (eveningShift && !isDisabled) handleDayOffShiftClick(eveningShift);
                               }}
-                              disabled={isDateInPast}
+                              disabled={isDisabled}
                               className={`justify-center p-4 relative ${
-                                isDateInPast
+                                isDisabled
                                   ? "opacity-50 cursor-not-allowed"
                                   : eveningDayOffShift
                                   ? eveningDayOffShift.status === "WAITING"
@@ -1012,6 +1049,11 @@ const LawyerDashboard = () => {
                                   (Past date - unavailable)
                                 </span>
                               )}
+                              {hasConflict && !isDateInPast && (
+                                <span className="text-xs text-gray-500 block">
+                                  (Booking conflict - unavailable)
+                                </span>
+                              )}
                               {eveningDayOffShift && (
                                 <Badge
                                   variant="secondary"
@@ -1028,15 +1070,26 @@ const LawyerDashboard = () => {
                       {/* Register Button */}
                       {(() => {
                         const isDateInPast = selectedDate < new Date(new Date().setHours(0, 0, 0, 0));
+                        const hasAnyBookingConflict = selectedShifts.some(shift => 
+                          hasBookingConflict(selectedDate, shift.startTime, shift.endTime)
+                        );
+                        const isRegisterDisabled = selectedShifts.length === 0 || isDateInPast || hasAnyBookingConflict;
+                        
+                        let buttonText = "Register Day Off";
+                        if (isDateInPast) {
+                          buttonText = "Cannot register for past dates";
+                        } else if (hasAnyBookingConflict) {
+                          buttonText = "Cannot register - booking conflict";
+                        }
                         
                         return (
                           <Button
                             onClick={registerDayOff}
-                            disabled={selectedShifts.length === 0 || isDateInPast}
+                            disabled={isRegisterDisabled}
                             className="w-full mt-4"
-                            variant={selectedShifts.length > 0 && !isDateInPast ? "default" : "outline"}
+                            variant={selectedShifts.length > 0 && !isRegisterDisabled ? "default" : "outline"}
                           >
-                            {isDateInPast ? "Cannot register for past dates" : "Register Day Off"}
+                            {buttonText}
                           </Button>
                         );
                       })()}

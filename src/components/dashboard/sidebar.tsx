@@ -70,6 +70,12 @@ const allNavItems = [
     roles: [UserRole.MANAGER, UserRole.ADMIN],
   },
   {
+    title: "View Feedbacks",
+    href: "/dashboard/view-feedbacks",
+    icon: MessageCircleMore,
+    roles: [UserRole.MANAGER, UserRole.ADMIN],
+  },
+  {
     title: "Schedule",
     href: "/dashboard/lawyer-dashboard",
     icon: Calendar,
@@ -85,12 +91,6 @@ const allNavItems = [
     title: "Check Bookings",
     href: "/dashboard/check-bookings",
     icon: BookOpenText,
-    roles: [UserRole.STAFF, UserRole.ADMIN],
-  },
-  {
-    title: "View Feedbacks",
-    href: "/dashboard/view-feedbacks",
-    icon: MessageCircleMore,
     roles: [UserRole.STAFF, UserRole.ADMIN],
   },
 ];

@@ -7,19 +7,19 @@
 // Base URLs for different services
 const API_BASES = {
   // Account & Authentication Service (Port 7218)
-  ACCOUNT: "https://localhost:7218",
+  ACCOUNT: "https://localhost:7095",
   
   // Booking Service (Port 7286)
-  BOOKING: "https://localhost:7286",
+  BOOKING: "https://localhost:7095",
   
   // Ticket Service (Port 7103)
-  TICKET: "https://localhost:7103",
+  TICKET: "https://localhost:7095",
   
   // Order/Payment Service (Port 7024)
-  ORDER: "https://localhost:7024",
+  ORDER: "https://localhost:7095",
   
   // Form/Template Service (Port 7276)
-  FORM: "https://localhost:7276",
+  FORM: "https://localhost:7095",
   
   // External APIs
   CURRENCY: "https://api.getgeoapi.com/v2/currency",
@@ -48,7 +48,7 @@ export const API_ENDPOINTS = {
   SERVICE: {
     BASE: `${API_BASES.ACCOUNT}/api/Service`,
     BY_ID: (serviceId: string) => `${API_BASES.ACCOUNT}/api/Service/${serviceId}`,
-    ACTIVE: `${API_BASES.ACCOUNT}/active-services`,
+    ACTIVE: `${API_BASES.ACCOUNT}/api/Service/active-services`,
   },
 
   // Lawyer endpoints
@@ -107,7 +107,7 @@ export const API_ENDPOINTS = {
 
   // Ticket endpoints
   TICKET: {
-    BASE: `${API_BASES.TICKET}/api`,
+    BASE: `${API_BASES.TICKET}/api/Ticket`,
     TICKET_BASE: `${API_BASES.TICKET}/api/Ticket`,
     ALL: `${API_BASES.TICKET}/api/Ticket/all`,
     BY_CUSTOMER: (userId: string) => `${API_BASES.TICKET}/api/Ticket/by-customer?userid=${userId}`,

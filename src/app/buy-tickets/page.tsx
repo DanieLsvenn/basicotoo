@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { Loader2, Package, ArrowRight, ChevronDown, ChevronUp } from "lucide-react";
-import { API_ENDPOINTS, apiFetch } from "@/lib/api-utils";
+import { ticketApi, API_ENDPOINTS, apiFetch } from "@/lib/api-utils";
+import { toast } from "sonner";
 
 // Types
 interface TicketPackage {
@@ -57,41 +58,47 @@ const BuyTicketsPage = () => {
 
   // --- LOGIC METHODS ---
 
-  // API request wrapper
-  const apiRequest = useCallback(async (url: string, options?: RequestInit) => {
-    const response = await apiFetch(`${API_ENDPOINTS.TICKET.BASE}${url}`, {
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-      },
-      ...options,
-    });
-
-    if (response.error) {
-      throw new Error(`API Error: ${response.error}`);
-    }
-
-    return response.data;
-  }, []);
-
   // Fetch active packages
   const fetchActivePackages = useCallback(async () => {
     setLoading(true);
     setError(null);
 
     try {
-      const data = await apiRequest("/ticket-packages-active");
-      setPackages(data);
+      const response = await ticketApi.getActivePackages();
+      
+      if (response.data) {
+        // Ensure data is an array, fallback to empty array if not
+        const packagesArray = Array.isArray(response.data) ? response.data : [];
+        setPackages(packagesArray);
+      } else if (response.error) {
+        setError(response.error);
+        setPackages([]); // Set empty array on error
+        toast.error("Failed to load ticket packages", {
+          description: response.error,
+        });
+      } else {
+        setError("No packages data received");
+        setPackages([]);
+        toast.error("Failed to load ticket packages", {
+          description: "No data received from server",
+        });
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch packages");
+      const errorMessage = err instanceof Error ? err.message : "Failed to fetch packages";
+      setError(errorMessage);
+      setPackages([]); // Set empty array on error
+      console.error("Failed to fetch ticket packages:", err);
+      toast.error("Failed to load ticket packages", {
+        description: "Please try again later.",
+      });
     } finally {
       setLoading(false);
     }
-  }, [apiRequest]);
+  }, []);
 
   // Get best value package (lowest price per ticket)
   const getBestValue = useCallback(() => {
-    if (packages.length === 0) return null;
+    if (!packages || packages.length === 0) return null;
     
     return packages.reduce((best, current) => {
       const currentValue = current.price / current.requestAmount;
@@ -102,7 +109,7 @@ const BuyTicketsPage = () => {
 
   // Get most popular package (cheapest total price)
   const getMostPopular = useCallback(() => {
-    if (packages.length === 0) return null;
+    if (!packages || packages.length === 0) return null;
     
     return packages.reduce((cheapest, current) => {
       return current.price < cheapest.price ? current : cheapest;
@@ -187,6 +194,14 @@ const BuyTicketsPage = () => {
           Oops! Something went wrong
         </h2>
         <p className="text-gray-600 mb-6">{error}</p>
+        <div className="text-sm text-gray-500 mb-6">
+          {error?.includes('500') && (
+            <p>Server error occurred. Please contact support if this continues.</p>
+          )}
+          {error?.includes('Network') && (
+            <p>Please check your internet connection and try again.</p>
+          )}
+        </div>
         <button
           onClick={handleRetry}
           className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
@@ -308,7 +323,8 @@ const BuyTicketsPage = () => {
   );
 
   const renderPackagesSection = () => {
-    if (packages.length === 0) return renderEmptyState();
+    // Add null/undefined check before checking length
+    if (!packages || packages.length === 0) return renderEmptyState();
 
     const bestValue = getBestValue();
     const mostPopular = getMostPopular();

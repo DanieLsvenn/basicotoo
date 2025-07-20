@@ -38,15 +38,7 @@ import {
   Ticket,
 } from "lucide-react";
 import Cookies from "js-cookie";
-import {
-  accountApi,
-  ticketApi,
-  bookingApi,
-  formApi,
-  serviceApi,
-  feedbackApi,
-  API_ENDPOINTS,
-} from "@/lib/api-utils";
+import { accountApi, ticketApi, bookingApi, formApi, serviceApi, feedbackApi, API_ENDPOINTS } from "@/lib/api-utils";
 import {
   Dialog,
   DialogContent,
@@ -138,19 +130,14 @@ export default function ProfilePage() {
   const [submittingFeedback, setSubmittingFeedback] = useState(false);
   const [bookingsPending, setBookingsPending] = useState<any[]>([]);
   const [bookingsPaid, setBookingsPaid] = useState<any[]>([]);
-  const [isLoadingBookingsPending, setIsLoadingBookingsPending] =
-    useState(false);
+  const [isLoadingBookingsPending, setIsLoadingBookingsPending] = useState(false);
   const [isLoadingBookingsPaid, setIsLoadingBookingsPaid] = useState(false);
   const [bookingsTab, setBookingsTab] = useState<"Pending" | "Paid">("Pending");
 
   // State variables for PurchasedFormsTab
-  const [purchasedForms, setPurchasedForms] = useState<
-    PurchasedFormWithTemplate[]
-  >([]);
+  const [purchasedForms, setPurchasedForms] = useState<PurchasedFormWithTemplate[]>([]);
   const [isLoadingForms, setIsLoadingForms] = useState(true);
-  const [downloadingForms, setDownloadingForms] = useState<Set<string>>(
-    new Set()
-  );
+  const [downloadingForms, setDownloadingForms] = useState<Set<string>>(new Set());
 
   // State variables for SendTicketForm
   const [content, setContent] = useState("");
@@ -162,7 +149,7 @@ export default function ProfilePage() {
   const fetchProfile = async () => {
     try {
       const response = await accountApi.getProfile();
-
+      
       if (response.data) {
         setProfile(response.data);
         setEditForm({
@@ -193,7 +180,7 @@ export default function ProfilePage() {
     setIsLoadingTickets(true);
     try {
       const response = await ticketApi.getByCustomer(profile.accountId);
-
+      
       if (response.data) {
         setTickets(response.data);
       } else if (response.error) {
@@ -290,10 +277,10 @@ export default function ProfilePage() {
         setProfile((prev) =>
           prev
             ? {
-                ...prev,
-                fullName: editForm.fullName,
-                gender: editForm.gender,
-              }
+              ...prev,
+              fullName: editForm.fullName,
+              gender: editForm.gender,
+            }
             : null
         );
 
@@ -390,11 +377,8 @@ export default function ProfilePage() {
     if (!profile?.accountId) return;
     setIsLoadingBookingsPending(true);
     try {
-      const response = await bookingApi.getByCustomer(
-        profile.accountId,
-        "Pending"
-      );
-
+      const response = await bookingApi.getByCustomer(profile.accountId, "Pending");
+      
       if (response.status === 204 || !response.data) {
         setBookingsPending([]);
       } else {
@@ -411,11 +395,8 @@ export default function ProfilePage() {
     if (!profile?.accountId) return;
     setIsLoadingBookingsPaid(true);
     try {
-      const response = await bookingApi.getByCustomer(
-        profile.accountId,
-        "Paid"
-      );
-
+      const response = await bookingApi.getByCustomer(profile.accountId, "Paid");
+      
       if (response.status === 204 || !response.data) {
         setBookingsPaid([]);
       } else {
@@ -432,11 +413,8 @@ export default function ProfilePage() {
     if (!profile?.accountId) return;
     setIsLoadingCompletedBookings(true);
     try {
-      const response = await bookingApi.getByCustomer(
-        profile.accountId,
-        "Completed"
-      );
-
+      const response = await bookingApi.getByCustomer(profile.accountId, "Completed");
+      
       if (response.status === 204 || !response.data) {
         setCompletedBookings([]);
       } else {
@@ -469,10 +447,7 @@ export default function ProfilePage() {
           setPurchasedForms([]);
           return;
         }
-        throw new Error(
-          formsResponse.error ||
-            `Failed to fetch forms: ${formsResponse.status}`
-        );
+        throw new Error(formsResponse.error || `Failed to fetch forms: ${formsResponse.status}`);
       }
 
       const purchasedFormsData: PurchasedForm[] = formsResponse.data;
@@ -553,58 +528,109 @@ export default function ProfilePage() {
   ) => {
     const safeFormName = formName || "form_download";
 
-    // Enhanced HTML processing - preserve structure and improve formatting
-    const processContentForPDF = (content: string): string => {
-      return (
-        content
-          // Clean up HTML entities
-          .replace(/&nbsp;/g, " ")
-          .replace(/&amp;/g, "&")
-          .replace(/&lt;/g, "<")
-          .replace(/&gt;/g, ">")
-          .replace(/&quot;/g, '"')
-          .replace(/&#39;/g, "'")
-          // TinyMCE specific cleanup
-          .replace(/<p><br\s*\/?><\/p>/gi, "<p>&nbsp;</p>") // Replace empty paragraphs with proper spacing
-          .replace(/<p>\s*<\/p>/gi, "<p>&nbsp;</p>") // Handle empty paragraphs
-          .replace(/(<\/p>)\s*(<p>)/gi, "$1$2") // Remove extra spaces between paragraphs
-          // Ensure proper spacing around block elements
-          .replace(/<\/p>\s*<p>/gi, "</p><p>")
-          .replace(/<\/div>\s*<div>/gi, "</div><div>")
-          .replace(/<\/h([1-6])>\s*<h/gi, "</h$1><h")
-          // Handle TinyMCE's span styling (convert to proper HTML elements where possible)
-          .replace(
-            /<span style="font-weight:\s*bold[^"]*"([^>]*)>/gi,
-            "<strong$1>"
-          )
-          .replace(/<\/span>(\s*<\/strong>)/gi, "</strong>")
-          .replace(
-            /<span style="font-style:\s*italic[^"]*"([^>]*)>/gi,
-            "<em$1>"
-          )
-          .replace(/<\/span>(\s*<\/em>)/gi, "</em>")
-          // Clean up excessive whitespace but preserve intentional spacing
-          .replace(/\s+/g, " ")
-          .replace(/>\s+</g, "><")
-          .trim()
-      );
+    // Clean and format HTML content for PDF generation
+    const formatHTMLContent = (content: string): string => {
+      return content
+        // Clean up HTML entities first
+        .replace(/&nbsp;/g, ' ')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .replace(/&Agrave;/g, 'À')
+        .replace(/&Aacute;/g, 'Á')
+        .replace(/&Acirc;/g, 'Â')
+        .replace(/&Atilde;/g, 'Ã')
+        .replace(/&Auml;/g, 'Ä')
+        .replace(/&Aring;/g, 'Å')
+        .replace(/&agrave;/g, 'à')
+        .replace(/&aacute;/g, 'á')
+        .replace(/&acirc;/g, 'â')
+        .replace(/&atilde;/g, 'ã')
+        .replace(/&auml;/g, 'ä')
+        .replace(/&aring;/g, 'å')
+        .replace(/&Egrave;/g, 'È')
+        .replace(/&Eacute;/g, 'É')
+        .replace(/&Ecirc;/g, 'Ê')
+        .replace(/&Euml;/g, 'Ë')
+        .replace(/&egrave;/g, 'è')
+        .replace(/&eacute;/g, 'é')
+        .replace(/&ecirc;/g, 'ê')
+        .replace(/&euml;/g, 'ë')
+        .replace(/&Igrave;/g, 'Ì')
+        .replace(/&Iacute;/g, 'Í')
+        .replace(/&Icirc;/g, 'Î')
+        .replace(/&Iuml;/g, 'Ï')
+        .replace(/&igrave;/g, 'ì')
+        .replace(/&iacute;/g, 'í')
+        .replace(/&icirc;/g, 'î')
+        .replace(/&iuml;/g, 'ï')
+        .replace(/&Ograve;/g, 'Ò')
+        .replace(/&Oacute;/g, 'Ó')
+        .replace(/&Ocirc;/g, 'Ô')
+        .replace(/&Otilde;/g, 'Õ')
+        .replace(/&Ouml;/g, 'Ö')
+        .replace(/&ograve;/g, 'ò')
+        .replace(/&oacute;/g, 'ó')
+        .replace(/&ocirc;/g, 'ô')
+        .replace(/&otilde;/g, 'õ')
+        .replace(/&ouml;/g, 'ö')
+        .replace(/&Ugrave;/g, 'Ù')
+        .replace(/&Uacute;/g, 'Ú')
+        .replace(/&Ucirc;/g, 'Û')
+        .replace(/&Uuml;/g, 'Ü')
+        .replace(/&ugrave;/g, 'ù')
+        .replace(/&uacute;/g, 'ú')
+        .replace(/&ucirc;/g, 'û')
+        .replace(/&uuml;/g, 'ü')
+        .replace(/&hellip;/g, '…')
+        // Fix problematic line breaks and underscores
+        .replace(/<br>\s*_+/gi, '</p><hr class="pdf-divider"><p>')
+        .replace(/_+/g, '<span class="pdf-underline">_________________________________</span>')
+        // Preserve center alignment and text formatting
+        .replace(/<p([^>]*align\s*=\s*["\']center["\'][^>]*)>/gi, '<p class="pdf-paragraph pdf-center"$1>')
+        .replace(/<p([^>]*style[^>]*text-align:\s*center[^>]*)>/gi, '<p class="pdf-paragraph pdf-center"$1>')
+        .replace(/<p([^>]*style[^>]*text-align:\s*right[^>]*)>/gi, '<p class="pdf-paragraph pdf-right"$1>')
+        .replace(/<div([^>]*style[^>]*text-align:\s*center[^>]*)>/gi, '<div class="pdf-div pdf-center"$1>')
+        .replace(/<div([^>]*style[^>]*text-align:\s*right[^>]*)>/gi, '<div class="pdf-div pdf-right"$1>')
+        // Add CSS classes for better styling
+        .replace(/<h1([^>]*)>/gi, '<h1 class="pdf-h1"$1>')
+        .replace(/<h2([^>]*)>/gi, '<h2 class="pdf-h2"$1>')
+        .replace(/<h3([^>]*)>/gi, '<h3 class="pdf-h3"$1>')
+        .replace(/<h4([^>]*)>/gi, '<h4 class="pdf-h4"$1>')
+        .replace(/<h5([^>]*)>/gi, '<h5 class="pdf-h5"$1>')
+        .replace(/<h6([^>]*)>/gi, '<h6 class="pdf-h6"$1>')
+        .replace(/<p(?![^>]*(class|style|align))([^>]*)>/gi, '<p class="pdf-paragraph"$2>')
+        .replace(/<ul([^>]*)>/gi, '<ul class="pdf-list"$1>')
+        .replace(/<ol([^>]*)>/gi, '<ol class="pdf-list pdf-ordered"$1>')
+        .replace(/<li([^>]*)>/gi, '<li class="pdf-list-item"$1>')
+        .replace(/<table([^>]*)>/gi, '<table class="pdf-table"$1>')
+        .replace(/<th([^>]*)>/gi, '<th class="pdf-table-header"$1>')
+        .replace(/<td([^>]*)>/gi, '<td class="pdf-table-cell"$1>')
+        .replace(/<strong([^>]*)>/gi, '<strong class="pdf-bold"$1>')
+        .replace(/<b([^>]*)>/gi, '<b class="pdf-bold"$1>')
+        .replace(/<em([^>]*)>/gi, '<em class="pdf-italic"$1>')
+        .replace(/<i([^>]*)>/gi, '<i class="pdf-italic"$1>')
+        .replace(/<div(?![^>]*(class|style))([^>]*)>/gi, '<div class="pdf-div"$2>')
+        // Remove any remaining problematic tags that might cause issues
+        .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+        .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+        .replace(/<link[^>]*>/gi, '')
+        .trim();
     };
 
-    const processedContent = processContentForPDF(formContent);
+    const formattedHTMLContent = formatHTMLContent(formContent);
 
     // Try popup window approach first
     try {
-      console.log("Attempting popup window PDF generation...");
-      const newWindow = window.open(
-        "",
-        "_blank",
-        "width=800,height=600,scrollbars=yes,resizable=yes"
-      );
+      console.log('Attempting popup window PDF generation...');
+      const newWindow = window.open('', '_blank', 'width=800,height=600,scrollbars=yes,resizable=yes');
       if (!newWindow) {
-        throw new Error("Popup blocked");
+        throw new Error('Popup blocked');
       }
 
-      // Write a completely clean HTML document with no external references
+      // Write a complete HTML document with comprehensive CSS for PDF formatting
       newWindow.document.write(`
         <!DOCTYPE html>
         <html>
@@ -617,108 +643,264 @@ export default function ProfilePage() {
               padding: 0;
               box-sizing: border-box;
             }
+            
             body {
-              font-family: 'Times New Roman', serif;
-              font-size: 14px;
+              font-family: Arial, Helvetica, sans-serif;
+              font-size: 12px;
               line-height: 1.6;
-              color: #333333;
+              color: #000000;
               background-color: #ffffff;
-              padding: 20mm;
-              width: 210mm;
+              padding: 5mm;
+              margin: 0;
+              width: auto;
+              min-height: auto;
               box-sizing: border-box;
             }
-            .header {
-              text-align: center;
-              margin-bottom: 30px;
-              border-bottom: 2px solid #2c3e50;
-              padding-bottom: 20px;
+            
+            .pdf-content {
+              margin: 0;
+              padding: 0;
+              word-wrap: break-word;
+              overflow-wrap: break-word;
             }
-            .header h1 {
-              font-size: 28px;
+            
+            /* Alignment classes */
+            .pdf-center {
+              text-align: center !important;
+              display: block;
+              width: 100%;
+            }
+            
+            .pdf-right {
+              text-align: right !important;
+              display: block;
+              width: 100%;
+            }
+            
+            /* Divider for underlines */
+            .pdf-divider {
+              border: none;
+              border-top: 1px solid #000000;
+              margin: 5px 0;
+              width: 100%;
+            }
+            
+            .pdf-underline {
+              text-decoration: underline;
+              text-decoration-style: solid;
+              text-decoration-thickness: 1px;
+            }
+            
+            /* Heading Styles */
+            .pdf-h1 {
+              font-size: 22px;
               font-weight: bold;
-              color: #2c3e50;
-              margin-bottom: 10px;
-              text-transform: uppercase;
-              letter-spacing: 1px;
-            }
-            .content {
-              font-size: 14px;
-              line-height: 1.8;
-              color: #333333;
-            }
-            .content h1 {
-              font-size: 24px;
-              color: #2c3e50;
+              color: #000000;
               margin: 25px 0 15px 0;
-              border-bottom: 1px solid #bdc3c7;
               padding-bottom: 8px;
-              font-weight: bold;
+              border-bottom: 1px solid #cccccc;
+              page-break-after: avoid;
             }
-            .content h2 {
-              font-size: 20px;
-              color: #34495e;
+            
+            .pdf-h2 {
+              font-size: 18px;
+              font-weight: bold;
+              color: #333333;
               margin: 20px 0 12px 0;
-              font-weight: bold;
+              page-break-after: avoid;
             }
-            .content h3 {
+            
+            .pdf-h3 {
               font-size: 16px;
-              color: #34495e;
-              margin: 15px 0 10px 0;
               font-weight: bold;
+              color: #444444;
+              margin: 18px 0 10px 0;
+              page-break-after: avoid;
             }
-            .content p {
-              margin: 12px 0;
-              text-align: justify;
+            
+            .pdf-h4 {
+              font-size: 14px;
+              font-weight: bold;
+              color: #555555;
+              margin: 15px 0 8px 0;
+              page-break-after: avoid;
             }
-            .content ul, .content ol {
-              margin: 15px 0;
+            
+            .pdf-h5 {
+              font-size: 13px;
+              font-weight: bold;
+              color: #666666;
+              margin: 12px 0 6px 0;
+              page-break-after: avoid;
+            }
+            
+            .pdf-h6 {
+              font-size: 12px;
+              font-weight: bold;
+              color: #777777;
+              margin: 10px 0 5px 0;
+              page-break-after: avoid;
+            }
+            
+            /* Paragraph Styles */
+            .pdf-paragraph {
+              margin: 4px 0;
+              text-indent: 0;
+              line-height: 1.4;
+              word-wrap: break-word;
+              overflow-wrap: break-word;
+              hyphens: auto;
+            }
+            
+            /* Center alignment for titles and headers */
+            .pdf-content p[style*="text-align: center"], 
+            .pdf-content div[style*="text-align: center"],
+            .pdf-content *[align="center"],
+            .pdf-center {
+              text-align: center !important;
+              display: block;
+              width: 100%;
+            }
+            
+            .pdf-content p[style*="text-align: right"],
+            .pdf-content div[style*="text-align: right"],
+            .pdf-right {
+              text-align: right !important;
+              display: block;
+              width: 100%;
+            }
+            
+            /* Handle underlines properly */
+            .pdf-content u {
+              text-decoration: underline;
+              text-decoration-thickness: 1px;
+              text-underline-offset: 2px;
+            }
+            
+            /* Handle line breaks and spacing */
+            .pdf-content br {
+              display: block;
+              margin: 2px 0;
+              content: "";
+            }
+            
+            /* Page break handling for long text */
+            .pdf-paragraph, .pdf-div {
+              page-break-inside: avoid;
+              orphans: 2;
+              widows: 2;
+            }
+            
+            /* List Styles */
+            .pdf-list {
+              margin: 10px 0;
               padding-left: 25px;
             }
-            .content li {
+            
+            .pdf-ordered {
+              list-style-type: decimal;
+            }
+            
+            .pdf-list-item {
               margin: 5px 0;
+              line-height: 1.6;
             }
-            .content strong, .content b {
-              font-weight: bold;
-              color: #2c3e50;
-            }
-            .content em, .content i {
-              font-style: italic;
-            }
-            .content table {
+            
+            /* Table Styles */
+            .pdf-table {
               width: 100%;
               border-collapse: collapse;
-              margin: 20px 0;
+              margin: 15px 0;
+              font-size: 11px;
             }
-            .content th, .content td {
-              border: 1px solid #bdc3c7;
-              padding: 8px 12px;
+            
+            .pdf-table-header {
+              background-color: #f5f5f5;
+              border: 1px solid #cccccc;
+              padding: 8px;
+              font-weight: bold;
               text-align: left;
             }
-            .content th {
-              background-color: #ecf0f1;
-              font-weight: bold;
-              color: #2c3e50;
+            
+            .pdf-table-cell {
+              border: 1px solid #cccccc;
+              padding: 6px 8px;
+              vertical-align: top;
             }
-            .content blockquote {
-              border-left: 4px solid #3498db;
-              margin: 20px 0;
-              padding: 10px 20px;
-              background-color: #f8f9fa;
+            
+            /* Text Formatting */
+            .pdf-bold {
+              font-weight: bold;
+            }
+            
+            .pdf-italic {
               font-style: italic;
             }
-            .page-break {
+            
+            /* Div Styles */
+            .pdf-div {
+              margin: 8px 0;
+            }
+            
+            /* Page Break Controls */
+            .page-break-before {
               page-break-before: always;
+            }
+            
+            .page-break-after {
+              page-break-after: always;
+            }
+            
+            .no-page-break {
+              page-break-inside: avoid;
+            }
+            
+            /* Additional utility styles */
+            br {
+              line-height: 1.8;
+            }
+            
+            hr {
+              border: none;
+              border-top: 1px solid #cccccc;
+              margin: 20px 0;
+            }
+            
+            blockquote {
+              margin: 15px 0;
+              padding: 10px 15px;
+              border-left: 4px solid #cccccc;
+              background-color: #f9f9f9;
+              font-style: italic;
+            }
+            
+            code {
+              background-color: #f5f5f5;
+              padding: 2px 4px;
+              border-radius: 3px;
+              font-family: 'Courier New', monospace;
+              font-size: 11px;
+            }
+            
+            pre {
+              background-color: #f5f5f5;
+              padding: 10px;
+              border-radius: 5px;
+              overflow-wrap: break-word;
+              white-space: pre-wrap;
+              font-family: 'Courier New', monospace;
+              font-size: 10px;
+              margin: 10px 0;
             }
           </style>
         </head>
         <body>
-          <div class="header">
-            <h1>${safeFormName}</h1>
+          <div class="pdf-content">
+            ${formattedHTMLContent}
           </div>
-          <div class="content">${processedContent}</div>
           
           <script>
-            console.log('PDF generation document loaded');
+            console.log('PDF generation document loaded with HTML formatting');
           </script>
         </body>
         </html>
@@ -726,188 +908,358 @@ export default function ProfilePage() {
       newWindow.document.close();
 
       // Wait for the document to be ready
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 500));
 
       // Import html2pdf in the new window context
-      const script = newWindow.document.createElement("script");
-      script.src =
-        "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
-
+      const script = newWindow.document.createElement('script');
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+      
       await new Promise((resolve, reject) => {
         script.onload = () => {
-          console.log("html2pdf script loaded successfully");
+          console.log('html2pdf script loaded successfully');
           resolve(true);
         };
         script.onerror = (error) => {
-          console.error("Failed to load html2pdf script:", error);
+          console.error('Failed to load html2pdf script:', error);
           reject(error);
         };
         newWindow.document.head.appendChild(script);
       });
 
       // Wait for html2pdf to be available
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 500));
 
       // Generate PDF in the isolated window
       const html2pdfLib = (newWindow as any).html2pdf;
       if (!html2pdfLib) {
-        throw new Error("html2pdf library failed to load in isolated window");
+        throw new Error('html2pdf library failed to load in isolated window');
       }
 
-      console.log("Generating PDF with html2pdf...");
+      console.log('Generating PDF with html2pdf...');
       const options = {
-        margin: [15, 15, 15, 15], // top, right, bottom, left in mm
+        margin: 5,
         filename: `${safeFormName.replace(/[^a-z0-9]/gi, "_")}.pdf`,
         html2canvas: {
-          scale: 3, // Higher scale for better quality
-          backgroundColor: "#ffffff",
-          useCORS: true,
-          allowTaint: false,
+          scale: 1.5,
+          backgroundColor: '#ffffff',
+          useCORS: false,
+          allowTaint: true,
           logging: false,
-          dpi: 300, // Higher DPI for better text quality
-          letterRendering: true, // Better text rendering
-          removeContainer: true,
+          width: 794,
+          letterRendering: true,
+          removeContainer: true
         },
         jsPDF: {
-          unit: "mm",
-          format: "a4",
-          orientation: "portrait",
-          compress: true,
-          precision: 2,
+          unit: 'mm',
+          format: 'a4',
+          orientation: 'portrait',
+          compress: true
         },
-        pagebreak: {
-          mode: ["avoid-all", "css", "legacy"],
-          before: ".page-break-before",
-          after: ".page-break-after",
-          avoid: ".no-page-break",
-        },
+        pagebreak: { 
+          mode: ['avoid-all', 'css'],
+          before: '.page-break-before',
+          after: '.page-break-after',
+          avoid: '.pdf-paragraph, .pdf-div, .no-page-break'
+        }
       };
 
-      await html2pdfLib().from(newWindow.document.body).set(options).save();
+      await html2pdfLib()
+        .from(newWindow.document.body)
+        .set(options)
+        .save();
 
-      console.log("PDF generated successfully!");
-
+      console.log('PDF generated successfully!');
+      
       // Clean up: close the popup window
       setTimeout(() => {
         newWindow.close();
       }, 2000);
-    } catch (popupError) {
-      console.log("Popup approach failed:", popupError);
-      console.log("Trying local html2pdf fallback...");
 
+    } catch (popupError) {
+      console.log('Popup approach failed:', popupError);
+      console.log('Trying local html2pdf fallback...');
+      
       // Fallback 1: Try using local html2pdf with DOM manipulation instead of iframe
       try {
-        console.log("Trying direct DOM approach with local html2pdf...");
-
+        console.log('Trying direct DOM approach with local html2pdf...');
+        
         // Create a temporary div to hold our content
-        const tempDiv = document.createElement("div");
-        tempDiv.style.position = "absolute";
-        tempDiv.style.left = "-9999px";
-        tempDiv.style.top = "-9999px";
-        tempDiv.style.width = "210mm";
-        tempDiv.style.visibility = "hidden";
-
-        // Add styles and content directly to the div
+        const tempDiv = document.createElement('div');
+        tempDiv.style.position = 'absolute';
+        tempDiv.style.left = '-9999px';
+        tempDiv.style.top = '-9999px';
+        tempDiv.style.width = '210mm';
+        tempDiv.style.visibility = 'hidden';
+        
+        // Add comprehensive styles and HTML content to the div
         tempDiv.innerHTML = `
           <style>
             .pdf-container {
-              font-family: Arial, sans-serif;
+              font-family: Arial, Helvetica, sans-serif;
               font-size: 12px;
               line-height: 1.6;
               color: #000;
               background: #fff;
-              padding: 15mm;
+              padding: 5mm;
+              margin: 0;
               box-sizing: border-box;
+              word-wrap: break-word;
+              overflow-wrap: break-word;
             }
-            .pdf-header {
-              text-align: center;
-              margin-bottom: 15px;
-              border-bottom: 1px solid #000;
+            
+            /* Alignment classes */
+            .pdf-center {
+              text-align: center !important;
+              display: block;
+              width: 100%;
+            }
+            
+            .pdf-right {
+              text-align: right !important;
+              display: block;
+              width: 100%;
+            }
+            
+            /* Divider for underlines */
+            .pdf-divider {
+              border: none;
+              border-top: 1px solid #000000;
+              margin: 5px 0;
+              width: 100%;
+            }
+            
+            .pdf-underline {
+              text-decoration: underline;
+              text-decoration-style: solid;
+              text-decoration-thickness: 1px;
+            }
+            
+            /* HTML Content Styles */
+            .pdf-content h1, .pdf-h1 {
+              font-size: 22px;
+              font-weight: bold;
+              color: #000;
+              margin: 25px 0 15px 0;
               padding-bottom: 8px;
+              border-bottom: 1px solid #ccc;
             }
-            .pdf-header h1 {
+            .pdf-content h2, .pdf-h2 {
               font-size: 18px;
-              margin: 0 0 5px 0;
+              font-weight: bold;
+              color: #333;
+              margin: 20px 0 12px 0;
+            }
+            .pdf-content h3, .pdf-h3 {
+              font-size: 16px;
+              font-weight: bold;
+              color: #444;
+              margin: 18px 0 10px 0;
+            }
+            .pdf-content h4, .pdf-h4 {
+              font-size: 14px;
+              font-weight: bold;
+              color: #555;
+              margin: 15px 0 8px 0;
+            }
+            .pdf-content h5, .pdf-h5 {
+              font-size: 13px;
+              font-weight: bold;
+              color: #666;
+              margin: 12px 0 6px 0;
+            }
+            .pdf-content h6, .pdf-h6 {
+              font-size: 12px;
+              font-weight: bold;
+              color: #777;
+              margin: 10px 0 5px 0;
+            }
+            .pdf-content p, .pdf-paragraph {
+              margin: 4px 0;
+              line-height: 1.4;
+              word-wrap: break-word;
+              overflow-wrap: break-word;
+              hyphens: auto;
+            }
+            
+            /* Center alignment for titles and headers */
+            .pdf-content p[style*="text-align: center"], 
+            .pdf-content div[style*="text-align: center"],
+            .pdf-content *[align="center"],
+            .pdf-center {
+              text-align: center !important;
+              display: block;
+              width: 100%;
+            }
+            
+            .pdf-content p[style*="text-align: right"],
+            .pdf-content div[style*="text-align: right"],
+            .pdf-right {
+              text-align: right !important;
+              display: block;
+              width: 100%;
+            }
+            
+            /* Handle underlines properly */
+            .pdf-content u {
+              text-decoration: underline;
+              text-decoration-thickness: 1px;
+              text-underline-offset: 2px;
+            }
+            
+            /* Handle line breaks and spacing */
+            .pdf-content br {
+              display: block;
+              margin: 2px 0;
+              content: "";
+            }
+            
+            /* Page break handling for long text */
+            .pdf-paragraph, .pdf-div {
+              page-break-inside: avoid;
+              orphans: 2;
+              widows: 2;
+            }
+            .pdf-content ul, .pdf-content ol, .pdf-list {
+              margin: 10px 0;
+              padding-left: 25px;
+            }
+            .pdf-content li, .pdf-list-item {
+              margin: 5px 0;
+              line-height: 1.6;
+            }
+            .pdf-content table, .pdf-table {
+              width: 100%;
+              border-collapse: collapse;
+              margin: 15px 0;
+              font-size: 11px;
+            }
+            .pdf-content th, .pdf-table-header {
+              background-color: #f5f5f5;
+              border: 1px solid #ccc;
+              padding: 8px;
+              font-weight: bold;
+              text-align: left;
+            }
+            .pdf-content td, .pdf-table-cell {
+              border: 1px solid #ccc;
+              padding: 6px 8px;
+              vertical-align: top;
+            }
+            .pdf-content strong, .pdf-content b, .pdf-bold {
               font-weight: bold;
             }
-            .pdf-header p {
-              font-size: 10px;
-              margin: 0;
-              color: #666;
+            .pdf-content em, .pdf-content i, .pdf-italic {
+              font-style: italic;
             }
-            .pdf-content {
-              white-space: pre-wrap;
-              word-wrap: break-word;
-              font-size: 12px;
+            .pdf-content div, .pdf-div {
+              margin: 4px 0;
+            }
+            .pdf-content br {
+              line-height: 1.8;
+            }
+            .pdf-content hr {
+              border: none;
+              border-top: 1px solid #ccc;
+              margin: 20px 0;
+            }
+            .pdf-content blockquote {
+              margin: 15px 0;
+              padding: 10px 15px;
+              border-left: 4px solid #ccc;
+              background-color: #f9f9f9;
+              font-style: italic;
             }
           </style>
           <div class="pdf-container">
-            <div class="pdf-header">
-              <h1>${safeFormName}</h1>
-              <p>Generated on ${new Date().toLocaleDateString()}</p>
-            </div>
-            <div class="pdf-content">${processedContent}</div>
+            <div class="pdf-content">${formattedHTMLContent}</div>
           </div>
         `;
-
+        
         document.body.appendChild(tempDiv);
-
+        
         // Wait a moment for styles to apply
-        await new Promise((resolve) => setTimeout(resolve, 100));
+        await new Promise(resolve => setTimeout(resolve, 100));
 
         const options = {
-          margin: 5, // Use single value instead of array
+          margin: 5,
           filename: `${safeFormName.replace(/[^a-z0-9]/gi, "_")}.pdf`,
           html2canvas: {
-            scale: 2,
-            backgroundColor: "#ffffff",
+            scale: 1.5,
+            backgroundColor: '#ffffff',
             useCORS: false,
             allowTaint: true,
             logging: false,
+            width: 794,
+            letterRendering: true,
+            removeContainer: true
           },
           jsPDF: {
-            unit: "mm",
-            format: "a4",
-            orientation: "portrait" as const,
-            compress: true,
+            unit: 'mm',
+            format: 'a4',
+            orientation: 'portrait' as const,
+            compress: true
           },
-          pagebreak: {
-            mode: ["avoid-all", "css", "legacy"],
-            avoid: ".no-page-break",
-          },
+          pagebreak: { 
+            mode: ['avoid-all', 'css'],
+            avoid: '.pdf-paragraph, .pdf-div, .no-page-break'
+          }
         };
 
-        console.log("Generating PDF from DOM element...");
+        console.log('Generating PDF from DOM element...');
         await html2pdf().from(tempDiv).set(options).save();
-        console.log("PDF generated successfully from DOM element!");
-
+        console.log('PDF generated successfully from DOM element!');
+        
         document.body.removeChild(tempDiv);
-      } catch (domError) {
-        console.error("DOM approach also failed:", domError);
-        console.log("Falling back to text file download...");
 
+      } catch (domError) {
+        console.error('DOM approach also failed:', domError);
+        console.log('Falling back to text file download...');
+        
+        // Convert HTML to plain text for fallback
+        const convertHTMLToPlainText = (htmlContent: string): string => {
+          return htmlContent
+            .replace(/<h[1-6][^>]*>/gi, '\n\n--- ')
+            .replace(/<\/h[1-6]>/gi, ' ---\n')
+            .replace(/<p[^>]*>/gi, '\n')
+            .replace(/<\/p>/gi, '\n')
+            .replace(/<br[^>]*>/gi, '\n')
+            .replace(/<div[^>]*>/gi, '\n')
+            .replace(/<\/div>/gi, '\n')
+            .replace(/<li[^>]*>/gi, '\n• ')
+            .replace(/<\/li>/gi, '')
+            .replace(/<[^>]*>/g, '') // Remove all remaining HTML tags
+            .replace(/&nbsp;/g, ' ')
+            .replace(/&amp;/g, '&')
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&quot;/g, '"')
+            .replace(/&#39;/g, "'")
+            .replace(/\n\s*\n\s*\n/g, '\n\n')
+            .replace(/^\s+|\s+$/g, '')
+            .trim();
+        };
+        
         // Fallback 2: Create a simple text file download
+        const plainTextForFallback = convertHTMLToPlainText(formattedHTMLContent);
         const textContent = `
 ${safeFormName}
 Generated on ${new Date().toLocaleDateString()}
 
-${processedContent}
+${plainTextForFallback}
         `.trim();
 
-        const blob = new Blob([textContent], { type: "text/plain" });
+        const blob = new Blob([textContent], { type: 'text/plain' });
         const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
+        const a = document.createElement('a');
         a.href = url;
         a.download = `${safeFormName.replace(/[^a-z0-9]/gi, "_")}.txt`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-
+        
         // Show a helpful message to the user
-        throw new Error(
-          "PDF generation not supported in this browser. Form downloaded as text file instead."
-        );
+        throw new Error('PDF generation not supported in this browser. Form downloaded as text file instead.');
       }
     }
   };
@@ -1032,9 +1384,9 @@ ${processedContent}
 
   // Helper to format price as currency
   const formatPrice = useCallback((price: number): string => {
-    return new Intl.NumberFormat("vi-VN", {
-      style: "currency",
-      currency: "VND",
+    return new Intl.NumberFormat('vi-VN', {
+      style: 'currency',
+      currency: 'VND'
     }).format(price);
   }, []);
 
@@ -1042,7 +1394,7 @@ ${processedContent}
   const fetchFeedbackForBooking = async (bookingId: string) => {
     try {
       const response = await feedbackApi.getByBooking(bookingId);
-
+      
       if (response.data) {
         setFeedbackContent(response.data.feedbackContent || "");
         setFeedbackRating(response.data.rating || 5);
@@ -1377,7 +1729,9 @@ ${processedContent}
                         <option value={1}>Female</option>
                       </select>
                     ) : (
-                      <p className="text-sm py-2">{userGenderText}</p>
+                      <p className="text-sm py-2">
+                        {userGenderText}
+                      </p>
                     )}
                   </div>
                 </div>
@@ -1499,17 +1853,14 @@ ${processedContent}
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-lg font-semibold">
-                    Your Purchased Forms
-                  </h3>
+                  <h3 className="text-lg font-semibold">Your Purchased Forms</h3>
                   <p className="text-sm text-muted-foreground">
-                    Edit and download your purchased form templates. Forms can
-                    be edited once before finalization.
+                    Edit and download your purchased form templates. Forms can be edited
+                    once before finalization.
                   </p>
                 </div>
                 <Badge variant="outline">
-                  {purchasedForms.length} form
-                  {purchasedForms.length !== 1 ? "s" : ""}
+                  {purchasedForms.length} form{purchasedForms.length !== 1 ? "s" : ""}
                 </Badge>
               </div>
 
@@ -1538,8 +1889,7 @@ ${processedContent}
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {purchasedForms.map((form) => {
-                    const formName =
-                      form.template?.formTemplateName || "Untitled Form";
+                    const formName = form.template?.formTemplateName || "Untitled Form";
                     const isEditable = form.status === "NOTUSED";
 
                     return (
@@ -1563,9 +1913,7 @@ ${processedContent}
                           {form.template && (
                             <div className="mb-3">
                               <p className="text-xs text-gray-500 mb-1 flex items-center gap-1">
-                                Price:{" "}
-                                <Ticket className="w-4 h-4 text-amber-600" />{" "}
-                                {form.template.price}
+                                Price: <Ticket className="w-4 h-4 text-amber-600" /> {form.template.price}
                               </p>
                               <p className="text-xs text-gray-400">
                                 Status: {form.template.status}
@@ -1592,11 +1940,7 @@ ${processedContent}
                             ) : (
                               <div title="This form has been editted before">
                                 <Button
-                                  onClick={() =>
-                                    toast.error(
-                                      "This form has already been edited and cannot be modified again."
-                                    )
-                                  }
+                                  onClick={() => toast.error("This form has already been edited and cannot be modified again.")}
                                   className="w-full text-gray-400 hover:text-gray-400 cursor-not-allowed"
                                   size="sm"
                                   variant="outline"
@@ -1611,9 +1955,7 @@ ${processedContent}
                             {/* Download Button */}
                             <Button
                               onClick={() => handleDownloadForm(form)}
-                              disabled={downloadingForms.has(
-                                form.customerFormId
-                              )}
+                              disabled={downloadingForms.has(form.customerFormId)}
                               className="w-full"
                               size="sm"
                             >
@@ -1651,17 +1993,15 @@ ${processedContent}
                     {profile && (
                       <div className="text-sm text-muted-foreground p-3 border rounded-md bg-muted/50">
                         Logged in as:{" "}
-                        <span className="font-medium">{profile.fullName}</span>{" "}
-                        ({profile.username})
+                        <span className="font-medium">{profile.fullName}</span> (
+                        {profile.username})
                       </div>
                     )}
 
                     {isLoadingServices ? (
                       <div className="flex items-center justify-center py-8">
                         <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
-                        <span className="ml-2 text-sm text-muted-foreground">
-                          Loading...
-                        </span>
+                        <span className="ml-2 text-sm text-muted-foreground">Loading...</span>
                       </div>
                     ) : (
                       <form onSubmit={handleSubmitTicket} className="space-y-4">
@@ -1671,18 +2011,13 @@ ${processedContent}
                             <select
                               id="service"
                               value={selectedServiceId}
-                              onChange={(e) =>
-                                setSelectedServiceId(e.target.value)
-                              }
+                              onChange={(e) => setSelectedServiceId(e.target.value)}
                               required
                               className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                             >
                               <option value="">-- Select a service --</option>
                               {services.map((service) => (
-                                <option
-                                  key={service.serviceId}
-                                  value={service.serviceId}
-                                >
+                                <option key={service.serviceId} value={service.serviceId}>
                                   {service.serviceName}
                                 </option>
                               ))}
@@ -1698,10 +2033,8 @@ ${processedContent}
                           <div className="space-y-2">
                             <Label>Service Details</Label>
                             <div className="text-sm text-muted-foreground p-3 border rounded-md bg-muted/50">
-                              {services.find(
-                                (s) => s.serviceId === selectedServiceId
-                              )?.serviceDescription ||
-                                "No description available"}
+                              {services.find((s) => s.serviceId === selectedServiceId)
+                                ?.serviceDescription || "No description available"}
                             </div>
                           </div>
                         )}
@@ -1818,9 +2151,7 @@ ${processedContent}
                   <CardTitle>My Booked Meetings</CardTitle>
                   <div className="flex gap-2 ml-4">
                     <Button
-                      variant={
-                        bookingsTab === "Pending" ? "default" : "outline"
-                      }
+                      variant={bookingsTab === "Pending" ? "default" : "outline"}
                       size="sm"
                       onClick={() => setBookingsTab("Pending")}
                     >
@@ -1845,7 +2176,7 @@ ${processedContent}
                     }}
                     disabled={isLoadingBookingsPending || isLoadingBookingsPaid}
                   >
-                    {isLoadingBookingsPending || isLoadingBookingsPaid ? (
+                    {(isLoadingBookingsPending || isLoadingBookingsPaid) ? (
                       <Loader2 className="h-4 w-4 animate-spin mr-2" />
                     ) : (
                       <RefreshCw className="h-4 w-4 mr-2" />
@@ -1863,9 +2194,7 @@ ${processedContent}
                   ) : bookingsPending.length === 0 ? (
                     <div className="text-center py-8">
                       <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                      <p className="text-muted-foreground">
-                        No pending bookings found
-                      </p>
+                      <p className="text-muted-foreground">No pending bookings found</p>
                       <p className="text-sm text-muted-foreground">
                         Your pending lawyer meetings will appear here
                       </p>
@@ -1903,16 +2232,12 @@ ${processedContent}
                               </div>
                             </div>
                             <div className="flex gap-2">
-                              <Link
-                                href={`/update-booking/${booking.bookingId}`}
-                              >
+                              <Link href={`/update-booking/${booking.bookingId}`}>
                                 <Button variant="outline" size="sm">
                                   Update
                                 </Button>
                               </Link>
-                              <Link
-                                href={`/checkout/booking/${booking.serviceId}/${booking.lawyerId}`}
-                              >
+                              <Link href={`/checkout/booking/${booking.serviceId}/${booking.lawyerId}`}>
                                 <Button variant="outline" size="sm">
                                   Go To Checkout
                                 </Button>
@@ -1923,63 +2248,63 @@ ${processedContent}
                       ))}
                     </div>
                   )
-                ) : isLoadingBookingsPaid ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
-                  </div>
-                ) : bookingsPaid.length === 0 ? (
-                  <div className="text-center py-8">
-                    <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                    <p className="text-muted-foreground">
-                      No paid bookings found
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      Your paid lawyer meetings will appear here
-                    </p>
-                  </div>
                 ) : (
-                  <div className="space-y-4 max-h-96 overflow-y-auto">
-                    {bookingsPaid.map((booking) => (
-                      <div
-                        key={booking.bookingId}
-                        className="border rounded-lg p-4 space-y-3"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="font-medium">
-                              {booking.serviceName}
-                            </div>
-                            <div className="text-sm text-muted-foreground">
-                              Lawyer: {booking.lawyerName}
-                            </div>
-                            <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
-                              <span className="flex items-center gap-1">
-                                <Calendar className="h-4 w-4" />
-                                <span>{booking.bookingDate}</span>
-                              </span>
-                              <span className="flex items-center gap-1">
-                                <Clock className="h-4 w-4" />
-                                <span>
-                                  {booking.startTime} - {booking.endTime}
+                  isLoadingBookingsPaid ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+                    </div>
+                  ) : bookingsPaid.length === 0 ? (
+                    <div className="text-center py-8">
+                      <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                      <p className="text-muted-foreground">No paid bookings found</p>
+                      <p className="text-sm text-muted-foreground">
+                        Your paid lawyer meetings will appear here
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4 max-h-96 overflow-y-auto">
+                      {bookingsPaid.map((booking) => (
+                        <div
+                          key={booking.bookingId}
+                          className="border rounded-lg p-4 space-y-3"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <div className="font-medium">
+                                {booking.serviceName}
+                              </div>
+                              <div className="text-sm text-muted-foreground">
+                                Lawyer: {booking.lawyerName}
+                              </div>
+                              <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
+                                <span className="flex items-center gap-1">
+                                  <Calendar className="h-4 w-4" />
+                                  <span>{booking.bookingDate}</span>
                                 </span>
-                              </span>
-                              <span className="flex items-center gap-1">
-                                <Landmark className="h-4 w-4" />
-                                <span>{formatPrice(booking.price)}</span>
-                              </span>
+                                <span className="flex items-center gap-1">
+                                  <Clock className="h-4 w-4" />
+                                  <span>
+                                    {booking.startTime} - {booking.endTime}
+                                  </span>
+                                </span>
+                                <span className="flex items-center gap-1">
+                                  <Landmark className="h-4 w-4" />
+                                  <span>{formatPrice(booking.price)}</span>
+                                </span>
+                              </div>
                             </div>
-                          </div>
-                          <div className="flex gap-2">
-                            <Link href={`/update-booking/${booking.bookingId}`}>
-                              <Button variant="outline" size="sm">
-                                Update
-                              </Button>
-                            </Link>
+                            <div className="flex gap-2">
+                              <Link href={`/update-booking/${booking.bookingId}`}>
+                                <Button variant="outline" size="sm">
+                                  Update
+                                </Button>
+                              </Link>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )
                 )}
               </CardContent>
             </Card>
@@ -2019,8 +2344,8 @@ ${processedContent}
                     {submittingFeedback
                       ? "Submitting..."
                       : feedbackId
-                      ? "Update Feedback"
-                      : "Submit Feedback"}
+                        ? "Update Feedback"
+                        : "Submit Feedback"}
                   </Button>
                 </div>
               </DialogContent>
@@ -2098,4 +2423,3 @@ ${processedContent}
     </div>
   );
 }
-

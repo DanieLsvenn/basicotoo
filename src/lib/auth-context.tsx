@@ -111,10 +111,10 @@ interface UpdateProfileData {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const API_BASE_AUTH = "https://localhost:7218/api/Account";
-  const API_BASE_LAWYER = "https://localhost:7218/api/Lawyer";
-  const API_BASE_STAFF = "https://localhost:7218/api/Staff";
-  const API_BASE_FORGOT_PASSWORD = "https://localhost:7218/api/ForgotPassword";
+  const API_BASE_AUTH = "https://localhost:7095/api/Account";
+  const API_BASE_LAWYER = "https://localhost:7095/api/Lawyer";
+  const API_BASE_STAFF = "https://localhost:7095/api/Staff";
+  const API_BASE_FORGOT_PASSWORD = "https://localhost:7095/api/ForgotPassword";
 
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);

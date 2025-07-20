@@ -1,5 +1,5 @@
 import { AuthProvider } from "@/lib/auth-context";
-import { StaffOnlyGuard } from "@/lib/auth-guard";
+import { ManagerOnlyGuard } from "@/lib/auth-guard";
 
 export default function DashboardLayout({
   children,
@@ -8,13 +8,13 @@ export default function DashboardLayout({
 }) {
   return (
     <AuthProvider>
-      <StaffOnlyGuard>
+      <ManagerOnlyGuard>
         <div className="flex h-screen bg-gray-50">
           <main className="flex-1 overflow-y-auto">
             <div className="p-6">{children}</div>
           </main>
         </div>
-      </StaffOnlyGuard>
+      </ManagerOnlyGuard>
     </AuthProvider>
   );
 }

@@ -918,17 +918,15 @@ ${processedContent}
   };
 
   // ===== FUNCTIONS FROM SendTicketForm =====
-  const fetchServices = async () => {
+  const fetchServices = useCallback(async () => {
     try {
-      const response = await serviceApi.getActive();
-
-      if (response.data) {
-        setServices(response.data);
-        if (response.data.length > 0) {
-          setSelectedServiceId(response.data[0].serviceId);
-        }
-      } else {
+      const response = await serviceApi.getAll();
+      if (!response.data) {
         throw new Error(response.error || "Failed to fetch services");
+      }
+      setServices(response.data);
+      if (response.data.length > 0) {
+        setSelectedServiceId(response.data[0].serviceId);
       }
     } catch (error) {
       console.error("Failed to fetch services:", error);
@@ -938,7 +936,7 @@ ${processedContent}
     } finally {
       setIsLoadingServices(false);
     }
-  };
+  }, []);
 
   const handleSubmitTicket = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -972,6 +970,7 @@ ${processedContent}
         serviceId: selectedServiceId,
         content_Send: content,
       });
+      console.log(profile.accountId, selectedServiceId, content);
 
       if (response.data) {
         toast.success("Ticket sent successfully", {
@@ -2099,3 +2098,4 @@ ${processedContent}
     </div>
   );
 }
+

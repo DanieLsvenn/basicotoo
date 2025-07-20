@@ -29,6 +29,7 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
+import { apiFetch, API_ENDPOINTS, accountApi, bookingApi, serviceApi, lawyerApi, orderApi, slotApi } from "@/lib/api-utils";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -208,23 +209,12 @@ export default function UpdateBookingPage() {
   // Fetch user profile
   const fetchProfile = useCallback(async () => {
     try {
-      const token = Cookies.get("authToken");
-      if (!token) {
-        router.push("/sign-in");
-        return;
-      }
+      const response = await accountApi.getProfile();
 
-      const response = await fetch("https://localhost:7218/api/Account/profile", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setProfile(data);
+      if (response.data) {
+        setProfile(response.data);
       } else {
-        throw new Error("Failed to fetch profile");
+        throw new Error(response.error || "Failed to fetch profile");
       }
     } catch (error) {
       console.error("Failed to fetch profile:", error);
@@ -239,12 +229,10 @@ export default function UpdateBookingPage() {
 
     try {
       console.log(profile.accountId, bookingId);
-      const response = await fetch(
-        `https://localhost:7286/api/Booking/${bookingId}`
-      );
+      const response = await bookingApi.getById(bookingId);
 
-      if (response.ok) {
-        const foundBooking: BookingDetail = await response.json();
+      if (response.data) {
+        const foundBooking: BookingDetail = response.data;
         console.log("Found booking:", foundBooking);
 
         if (!foundBooking) {
@@ -259,7 +247,7 @@ export default function UpdateBookingPage() {
         setDescription(foundBooking.description);
         setSelectedDate(new Date(foundBooking.bookingDate));
       } else {
-        throw new Error("Failed to fetch booking");
+        throw new Error(response.error || "Failed to fetch booking");
       }
     } catch (error) {
       console.error("Failed to fetch booking:", error);
@@ -271,9 +259,9 @@ export default function UpdateBookingPage() {
   // Fetch services
   const fetchServices = useCallback(async () => {
     try {
-      const response = await fetch("https://localhost:7218/api/Service");
-      if (response.ok) {
-        const data: Service[] = await response.json();
+      const response = await serviceApi.getAll();
+      if (response.data) {
+        const data: Service[] = response.data;
         setServices(data.filter(s => s.status === "Active"));
       }
     } catch (error) {
@@ -286,9 +274,9 @@ export default function UpdateBookingPage() {
     if (!serviceId) return;
 
     try {
-      const response = await fetch(`https://localhost:7218/api/Lawyer/service/${serviceId}`);
-      if (response.ok) {
-        const data: Lawyer[] = await response.json();
+      const response = await lawyerApi.getByService(serviceId);
+      if (response.data) {
+        const data: Lawyer[] = response.data;
         setLawyers(data);
       }
     } catch (error) {
@@ -303,12 +291,10 @@ export default function UpdateBookingPage() {
     setSlotsLoading(true);
     try {
       const formattedDate = formatDate(date);
-      const response = await fetch(
-        `https://localhost:7286/api/Slot/free-slot?lawyerId=${lawyerId}&date=${formattedDate}`
-      );
+      const response = await slotApi.getFreeSlots(lawyerId, formattedDate);
 
-      if (response.ok) {
-        const slots: Slot[] = await response.json();
+      if (response.data) {
+        const slots: Slot[] = response.data;
         slots.sort((a, b) => a.slotStartTime.localeCompare(b.slotStartTime));
         setAvailableSlots(slots);
         setSelectedSlots([]);
@@ -410,12 +396,6 @@ export default function UpdateBookingPage() {
 
     setUpdating(true);
     try {
-      const token = Cookies.get("authToken");
-      if (!token) {
-        router.push("/sign-in");
-        return;
-      }
-
       const updateData = {
         bookingDate: formatDate(selectedDate),
         description: description.trim(),
@@ -426,16 +406,9 @@ export default function UpdateBookingPage() {
         slotId: selectedSlots
       };
 
-      const response = await fetch(`https://localhost:7286/api/Booking/${bookingId}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(updateData),
-      });
+      const response = await bookingApi.update(bookingId, updateData);
 
-      if (response.ok) {
+      if (response.data) {
         // Prepare updated booking info for dialog
         const selectedService = services.find(s => s.serviceId === selectedServiceId);
         const sortedSlots = availableSlots
@@ -458,8 +431,7 @@ export default function UpdateBookingPage() {
         setShowUpdateDialog(true);
         toast.success("Booking updated successfully!");
       } else {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to update booking");
+        throw new Error(response.error || "Failed to update booking");
       }
     } catch (error) {
       console.error("Failed to update booking:", error);
@@ -480,24 +452,12 @@ export default function UpdateBookingPage() {
         amount: updatedBookingInfo.price,
       };
 
-      const response = await fetch("https://localhost:7024/api/Payment/create-payment-url", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(paymentData),
-      });
+      const response = await orderApi.createPaymentUrl(paymentData);
 
-      if (response.ok) {
-        const data = await response.json();
-        if (data.url) {
-          window.location.href = data.url;
-        } else {
-          toast.error("No payment URL returned from server.");
-        }
+      if (response.data && response.data.url) {
+        window.location.href = response.data.url;
       } else {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to create payment URL");
+        toast.error("No payment URL returned from server.");
       }
     } catch (error) {
       console.error("Payment failed:", error);

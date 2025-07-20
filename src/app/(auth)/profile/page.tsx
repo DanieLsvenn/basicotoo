@@ -37,6 +37,7 @@ import {
   Ticket,
 } from "lucide-react";
 import Cookies from "js-cookie";
+import { accountApi, ticketApi, bookingApi, formApi, serviceApi, feedbackApi, API_ENDPOINTS } from "@/lib/api-utils";
 import {
   Dialog,
   DialogContent,
@@ -146,23 +147,16 @@ export default function ProfilePage() {
 
   const fetchProfile = async () => {
     try {
-      const token = Cookies.get("authToken");
-      const response = await fetch(
-        "https://localhost:7218/api/Account/profile",
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        setProfile(data);
+      const response = await accountApi.getProfile();
+      
+      if (response.data) {
+        setProfile(response.data);
         setEditForm({
-          fullName: data.fullName || "",
-          gender: data.gender || 0,
+          fullName: response.data.fullName || "",
+          gender: response.data.gender || 0,
         });
+      } else if (response.error) {
+        throw new Error(response.error);
       }
     } catch (error) {
       console.error("Failed to fetch profile:", error);
@@ -184,21 +178,12 @@ export default function ProfilePage() {
 
     setIsLoadingTickets(true);
     try {
-      const token = Cookies.get("authToken");
-      const response = await fetch(
-        `https://localhost:7103/api/Ticket/by-customer?userid=${profile.accountId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        setTickets(data);
-      } else {
-        throw new Error("Failed to fetch tickets");
+      const response = await ticketApi.getByCustomer(profile.accountId);
+      
+      if (response.data) {
+        setTickets(response.data);
+      } else if (response.error) {
+        throw new Error(response.error);
       }
     } catch (error) {
       console.error("Failed to fetch tickets:", error);
@@ -256,30 +241,19 @@ export default function ProfilePage() {
 
       const { url } = await uploadResponse.json();
 
-      // Update profile with new image URL
-      const token = Cookies.get("authToken");
-      const updateResponse = await fetch(
-        "https://localhost:7218/api/Account/profile/update",
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            fullName: profile?.fullName,
-            gender: profile?.gender,
-            image: url, // Send the Cloudinary URL
-          }),
-        }
-      );
+      // Update profile with new image URL using centralized API
+      const updateResponse = await accountApi.updateProfile({
+        fullName: profile?.fullName,
+        gender: profile?.gender,
+        image: url, // Send the Cloudinary URL
+      });
 
-      if (updateResponse.ok) {
+      if (updateResponse.data) {
         // Update local state
         setProfile((prev) => (prev ? { ...prev, image: url } : null));
         toast.success("Profile picture updated successfully");
       } else {
-        throw new Error("Failed to update profile");
+        throw new Error(updateResponse.error || "Failed to update profile");
       }
     } catch (error) {
       console.error("Failed to upload image:", error);
@@ -292,23 +266,12 @@ export default function ProfilePage() {
   const handleSaveProfile = async () => {
     setSaving(true);
     try {
-      const token = Cookies.get("authToken");
-      const response = await fetch(
-        "https://localhost:7218/api/Account/profile/update",
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            fullName: editForm.fullName,
-            gender: editForm.gender,
-          }),
-        }
-      );
+      const response = await accountApi.updateProfile({
+        fullName: editForm.fullName,
+        gender: editForm.gender,
+      });
 
-      if (response.ok) {
+      if (response.data) {
         // Update the profile state with the new values
         setProfile((prev) =>
           prev
@@ -325,7 +288,7 @@ export default function ProfilePage() {
           onDismiss: (t) => console.log(`User dismissed toast: ${t.id}`),
         });
       } else {
-        throw new Error("Failed to update profile");
+        throw new Error(response.error || "Failed to update profile");
       }
     } catch (error) {
       console.error("Failed to update profile:", error);
@@ -413,22 +376,12 @@ export default function ProfilePage() {
     if (!profile?.accountId) return;
     setIsLoadingBookingsPending(true);
     try {
-      const token = Cookies.get("authToken");
-      const response = await fetch(
-        `https://localhost:7286/api/Booking?customerId=${profile.accountId}&status=Pending`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-      if (response.status === 204) {
+      const response = await bookingApi.getByCustomer(profile.accountId, "Pending");
+      
+      if (response.status === 204 || !response.data) {
         setBookingsPending([]);
-      } else if (response.ok) {
-        const data = await response.json();
-        setBookingsPending(data);
       } else {
-        throw new Error("Failed to fetch pending bookings");
+        setBookingsPending(response.data);
       }
     } catch (error) {
       toast.error("Failed to load pending bookings");
@@ -441,22 +394,12 @@ export default function ProfilePage() {
     if (!profile?.accountId) return;
     setIsLoadingBookingsPaid(true);
     try {
-      const token = Cookies.get("authToken");
-      const response = await fetch(
-        `https://localhost:7286/api/Booking?customerId=${profile.accountId}&status=Paid`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-      if (response.status === 204) {
+      const response = await bookingApi.getByCustomer(profile.accountId, "Paid");
+      
+      if (response.status === 204 || !response.data) {
         setBookingsPaid([]);
-      } else if (response.ok) {
-        const data = await response.json();
-        setBookingsPaid(data);
       } else {
-        throw new Error("Failed to fetch paid bookings");
+        setBookingsPaid(response.data);
       }
     } catch (error) {
       toast.error("Failed to load paid bookings");
@@ -469,22 +412,12 @@ export default function ProfilePage() {
     if (!profile?.accountId) return;
     setIsLoadingCompletedBookings(true);
     try {
-      const token = Cookies.get("authToken");
-      const response = await fetch(
-        `https://localhost:7286/api/Booking?customerId=${profile.accountId}&status=Completed`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-      if (response.status === 204) {
+      const response = await bookingApi.getByCustomer(profile.accountId, "Completed");
+      
+      if (response.status === 204 || !response.data) {
         setCompletedBookings([]);
-      } else if (response.ok) {
-        const data = await response.json();
-        setCompletedBookings(data);
       } else {
-        throw new Error("Failed to fetch completed bookings");
+        setCompletedBookings(response.data);
       }
     } catch (error) {
       toast.error("Failed to load completed bookings");
@@ -502,35 +435,21 @@ export default function ProfilePage() {
 
     setIsLoadingForms(true);
     try {
-      const token = Cookies.get("authToken");
-
-      if (!token) {
-        toast.error("Please log in to view your forms");
-        return;
-      }
-
       console.log("Fetching forms for customer:", profile.accountId);
 
       // First, fetch purchased forms
-      const formsResponse = await fetch(
-        `https://localhost:7276/api/form/customer/${profile.accountId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      const formsResponse = await formApi.getByCustomer(profile.accountId);
 
-      if (!formsResponse.ok) {
+      if (!formsResponse.data) {
         if (formsResponse.status === 404) {
           console.log("No forms found for customer");
           setPurchasedForms([]);
           return;
         }
-        throw new Error(`Failed to fetch forms: ${formsResponse.status}`);
+        throw new Error(formsResponse.error || `Failed to fetch forms: ${formsResponse.status}`);
       }
 
-      const purchasedFormsData: PurchasedForm[] = await formsResponse.json();
+      const purchasedFormsData: PurchasedForm[] = formsResponse.data;
       console.log("Fetched purchased forms:", purchasedFormsData);
 
       // Only fetch templates if we have forms
@@ -540,17 +459,10 @@ export default function ProfilePage() {
       }
 
       // Then fetch templates
-      const templatesResponse = await fetch(
-        `https://localhost:7276/api/templates`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      const templatesResponse = await formApi.getTemplates();
 
-      if (templatesResponse.ok) {
-        const allTemplates: FormTemplate[] = await templatesResponse.json();
+      if (templatesResponse.data) {
+        const allTemplates: FormTemplate[] = templatesResponse.data;
         console.log("Fetched templates:", allTemplates.length);
 
         // Create map and combine data
@@ -671,21 +583,15 @@ export default function ProfilePage() {
   // ===== FUNCTIONS FROM SendTicketForm =====
   const fetchServices = async () => {
     try {
-      const token = Cookies.get("authToken");
-      const response = await fetch("https://localhost:7218/active-services", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      const response = await serviceApi.getActive();
 
-      if (response.ok) {
-        const data = await response.json();
-        setServices(data);
-        if (data.length > 0) {
-          setSelectedServiceId(data[0].serviceId);
+      if (response.data) {
+        setServices(response.data);
+        if (response.data.length > 0) {
+          setSelectedServiceId(response.data[0].serviceId);
         }
       } else {
-        throw new Error("Failed to fetch services");
+        throw new Error(response.error || "Failed to fetch services");
       }
     } catch (error) {
       console.error("Failed to fetch services:", error);
@@ -724,36 +630,27 @@ export default function ProfilePage() {
     setIsSubmitting(true);
 
     try {
-      const token = Cookies.get("authToken");
-
-      const response = await fetch("https://localhost:7103/api/Ticket", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          userId: profile.accountId,
-          serviceId: selectedServiceId,
-          content_Send: content,
-        }),
+      const response = await ticketApi.create({
+        userId: profile.accountId,
+        serviceId: selectedServiceId,
+        content_Send: content,
       });
 
-      if (!response.ok) {
-        throw new Error("Failed to send ticket");
+      if (response.data) {
+        toast.success("Ticket sent successfully", {
+          description: "Staff will respond to your request soon.",
+        });
+
+        setContent("");
+        if (services.length > 0) {
+          setSelectedServiceId(services[0].serviceId);
+        }
+
+        // Refresh tickets after successful submission
+        handleTicketSent();
+      } else {
+        throw new Error(response.error || "Failed to send ticket");
       }
-
-      toast.success("Ticket sent successfully", {
-        description: "Staff will respond to your request soon.",
-      });
-
-      setContent("");
-      if (services.length > 0) {
-        setSelectedServiceId(services[0].serviceId);
-      }
-
-      // Refresh tickets after successful submission
-      handleTicketSent();
     } catch (error) {
       console.error("Failed to send ticket:", error);
       toast.error("Error", {
@@ -808,14 +705,12 @@ export default function ProfilePage() {
   // Fetch feedback for a booking
   const fetchFeedbackForBooking = async (bookingId: string) => {
     try {
-      const res = await fetch(
-        `https://localhost:7286/api/feedback/booking/${bookingId}`
-      );
-      if (res.ok) {
-        const data = await res.json();
-        setFeedbackContent(data.feedbackContent || "");
-        setFeedbackRating(data.rating || 5);
-        setFeedbackId(data.feedbackId);
+      const response = await feedbackApi.getByBooking(bookingId);
+      
+      if (response.data) {
+        setFeedbackContent(response.data.feedbackContent || "");
+        setFeedbackRating(response.data.rating || 5);
+        setFeedbackId(response.data.feedbackId);
       } else {
         setFeedbackContent("");
         setFeedbackRating(5);
@@ -840,35 +735,25 @@ export default function ProfilePage() {
     if (!feedbackBooking) return;
     setSubmittingFeedback(true);
     try {
-      const token = Cookies.get("authToken");
-      const url = feedbackId
-        ? `https://localhost:7286/api/feedback/${feedbackId}`
-        : "https://localhost:7286/api/feedback";
-      const method = feedbackId ? "PUT" : "POST";
-      const body = feedbackId
-        ? JSON.stringify({ feedbackContent, rating: feedbackRating })
-        : JSON.stringify({
-          bookingId: feedbackBooking.bookingId,
-          customerId: profile?.accountId,
-          feedbackContent,
-          rating: feedbackRating,
-        });
+      const data = feedbackId
+        ? { feedbackContent, rating: feedbackRating }
+        : {
+            bookingId: feedbackBooking.bookingId,
+            customerId: profile?.accountId,
+            feedbackContent,
+            rating: feedbackRating,
+          };
 
-      const res = await fetch(url, {
-        method,
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body,
-      });
+      const response = feedbackId
+        ? await feedbackApi.update(feedbackId, data)
+        : await feedbackApi.create(data);
 
-      if (res.ok) {
+      if (response.data) {
         toast.success("Feedback submitted!");
         setFeedbackDialogOpen(false);
         // Optionally refresh bookings or feedback state here
       } else {
-        throw new Error("Failed to submit feedback");
+        throw new Error(response.error || "Failed to submit feedback");
       }
     } catch (error) {
       toast.error("Failed to submit feedback");

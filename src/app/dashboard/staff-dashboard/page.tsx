@@ -25,6 +25,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { apiFetch, API_ENDPOINTS } from "@/lib/api-utils";
 
 interface Profile {
   accountId: string;
@@ -84,39 +85,13 @@ const StaffDashboard = () => {
 
   const fetchProfile = useCallback(async () => {
     try {
-      const token = getToken();
-
-      if (!token) {
-        console.error("No auth token found");
-        toast.error("Please login to continue");
-        return;
-      }
-
-      const response = await fetch(
-        "https://localhost:7218/api/Account/profile",
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        setProfile(data);
-        console.log("Profile fetched successfully:", data);
+      const response = await apiFetch(API_ENDPOINTS.ACCOUNT.PROFILE);
+      if (response.data) {
+        setProfile(response.data);
+        console.log("Profile fetched successfully:", response.data);
       } else {
-        const errorData = await response
-          .json()
-          .catch(() => ({ message: "Unknown error" }));
-        console.error("Profile fetch failed:", response.status, errorData);
-
-        if (response.status === 401) {
-          toast.error("Session expired. Please login again.");
-        } else {
-          toast.error("Failed to fetch profile");
-        }
+        console.error("Profile fetch failed:", response.error);
+        toast.error(response.error || "Failed to fetch profile");
       }
     } catch (error) {
       console.error("Failed to fetch profile:", error);
@@ -127,64 +102,32 @@ const StaffDashboard = () => {
   const fetchTickets = useCallback(async () => {
     setLoading(true);
     try {
-      const token = getToken();
+      const response = await apiFetch(API_ENDPOINTS.TICKET.ALL);
+      
+      if (response.data) {
+        console.log("Raw tickets data:", response.data);
+        const ticketsArray = Array.isArray(response.data) ? response.data : response.data.tickets || [];
 
-      if (!token) {
-        console.error("No auth token found");
-        toast.error("Please login to continue");
-        return;
+        const mappedTickets = ticketsArray.map((ticket: any) => ({
+          ticketId: ticket.ticketId,
+          userId: ticket.userId,
+          userName: ticket.userName || "Unknown User",
+          staffId: ticket.staffId,
+          serviceId: ticket.serviceId,
+          content_Send: ticket.content_Send,
+          content_Response: ticket.content_Response,
+          response: ticket.response || ticket.content_Response,
+          createdAt: ticket.createdAt,
+          status: ticket.status || "Pending",
+        }));
+
+        setTickets(mappedTickets);
+        console.log("Processed tickets:", mappedTickets);
+        console.log("Total tickets fetched:", mappedTickets.length);
+      } else {
+        console.error("Tickets fetch failed:", response.error);
+        toast.error(response.error || "Failed to fetch tickets");
       }
-
-      console.log(
-        "Fetching tickets with token:",
-        token ? "Token present" : "No token"
-      );
-
-      const response = await fetch("https://localhost:7103/api/Ticket/all", {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
-
-      console.log("Tickets response status:", response.status);
-
-      if (!response.ok) {
-        const errorData = await response
-          .json()
-          .catch(() => ({ message: "Unknown error" }));
-        console.error("Tickets fetch failed:", response.status, errorData);
-
-        if (response.status === 401) {
-          toast.error("Session expired. Please login again.");
-        } else {
-          toast.error("Failed to fetch tickets");
-        }
-        return;
-      }
-
-      const data = await response.json();
-      console.log("Raw tickets data:", data);
-
-      const ticketsArray = Array.isArray(data) ? data : data.tickets || [];
-
-      const mappedTickets = ticketsArray.map((ticket: any) => ({
-        ticketId: ticket.ticketId,
-        userId: ticket.userId,
-        userName: ticket.userName || "Unknown User",
-        staffId: ticket.staffId,
-        serviceId: ticket.serviceId,
-        content_Send: ticket.content_Send,
-        content_Response: ticket.content_Response,
-        response: ticket.response || ticket.content_Response,
-        createdAt: ticket.createdAt,
-        status: ticket.status || "Pending",
-      }));
-
-      setTickets(mappedTickets);
-      console.log("Processed tickets:", mappedTickets);
-      console.log("Total tickets fetched:", mappedTickets.length);
     } catch (error) {
       toast.error("Failed to fetch tickets");
       console.error("Fetch tickets error:", error);
@@ -206,22 +149,12 @@ const StaffDashboard = () => {
     setIsSubmitting(true);
 
     try {
-      const token = getToken();
       const staffId = getUserId();
-
-      if (!token) {
-        toast.error("Please login to continue");
-        return;
-      }
-
-      const replyResponse = await fetch(
-        `https://localhost:7103/api/Ticket/${selectedTicket.ticketId}/reply`,
+      
+      const replyResponse = await apiFetch(
+        API_ENDPOINTS.TICKET.REPLY(selectedTicket.ticketId),
         {
           method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
           body: JSON.stringify({
             ticketId: selectedTicket.ticketId,
             staffId,
@@ -230,30 +163,26 @@ const StaffDashboard = () => {
         }
       );
 
-      if (!replyResponse.ok) {
-        const errorData = await replyResponse
-          .json()
-          .catch(() => ({ message: "Unknown error" }));
-        console.error("Reply failed:", replyResponse.status, errorData);
-        throw new Error(errorData.message || "Failed to send response");
+      if (replyResponse.data) {
+        toast.success("Response sent successfully");
+        setTickets((prevTickets) =>
+          prevTickets.map((ticket) =>
+            ticket.ticketId === selectedTicket.ticketId
+              ? {
+                  ...ticket,
+                  response,
+                  content_Response: response,
+                  status: "ANSWERED",
+                }
+              : ticket
+          )
+        );
+
+        setSelectedTicket(null);
+        setResponse("");
+      } else {
+        throw new Error(replyResponse.error || "Failed to send response");
       }
-
-      toast.success("Response sent successfully");
-      setTickets((prevTickets) =>
-        prevTickets.map((ticket) =>
-          ticket.ticketId === selectedTicket.ticketId
-            ? {
-                ...ticket,
-                response,
-                content_Response: response,
-                status: "ANSWERED",
-              }
-            : ticket
-        )
-      );
-
-      setSelectedTicket(null);
-      setResponse("");
     } catch (error) {
       toast.error("Failed to send response");
       console.error("Reply error:", error);

@@ -42,6 +42,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { MaxWidthWrapper } from "@/components/max-width-wrapper";
+import { apiFetch, API_ENDPOINTS } from "@/lib/api-utils";
 
 // Dynamic import for TinyMCE editor to avoid SSR issues
 const DynamicEditor = dynamic(() => import("@/components/DynamicEditor"), {
@@ -52,8 +53,6 @@ const DynamicEditor = dynamic(() => import("@/components/DynamicEditor"), {
 });
 
 // Constants
-const API_BASE_URL = "https://localhost:7276/api";
-const API_SERVICE = "https://localhost:7218/api/Service";
 const STATUS_OPTIONS = ["ACTIVE", "INACTIVE"] as const;
 
 // Types
@@ -109,31 +108,24 @@ export default function FormTemplatesPage() {
 
   // API request wrapper
   const apiRequest = useCallback(async (url: string, options?: RequestInit) => {
-    const response = await fetch(`${API_BASE_URL}${url}`, {
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-      },
-      ...options,
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`API Error (${response.status}): ${errorText}`);
+    const fullUrl = url.startsWith('http') ? url : `${API_ENDPOINTS.FORM.BASE}${url}`;
+    const response = await apiFetch(fullUrl, options);
+    
+    if (!response.data && response.error) {
+      throw new Error(response.error);
     }
-
-    return response.json();
+    
+    return response.data;
   }, []);
 
   // Fetch all services
   const fetchServices = useCallback(async () => {
     try {
-      const response = await fetch(API_SERVICE);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch services: ${response.status}`);
+      const response = await apiFetch(API_ENDPOINTS.SERVICE.BASE);
+      if (!response.data) {
+        throw new Error(response.error || "Failed to fetch services");
       }
-      const data = await response.json();
-      setServices(data);
+      setServices(response.data);
     } catch (err) {
       console.error("Failed to fetch services:", err);
       toast.error("Failed to fetch services");

@@ -9,6 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Mail, Phone, User } from "lucide-react";
 import Link from "next/link";
+import { accountApi, serviceApi, lawyerApi, API_ENDPOINTS } from "@/lib/api-utils";
 
 interface ServiceForLawyer {
   serviceId: string;
@@ -34,9 +35,6 @@ interface Service {
   serviceName: string;
   status: "Active" | "Inactive";
 }
-
-const API_LAWYER = "https://localhost:7218/api/Lawyer";
-const API_SERVICE = "https://localhost:7218/api/Service";
 
 const OurLawyersPage = () => {
   const [lawyers, setLawyers] = useState<Lawyer[]>([]);
@@ -87,14 +85,14 @@ const OurLawyersPage = () => {
 
   const fetchLawyers = async () => {
     try {
-      const response = await fetch(API_LAWYER);
-      if (!response.ok) {
-        throw new Error("Failed to fetch lawyers");
+      const response = await lawyerApi.getAll();
+      if (response.data) {
+        setLawyers(
+          response.data.filter((lawyer: Lawyer) => lawyer.accountStatus === "ACTIVE")
+        );
+      } else {
+        throw new Error(response.error || "Failed to fetch lawyers");
       }
-      const data = await response.json();
-      setLawyers(
-        data.filter((lawyer: Lawyer) => lawyer.accountStatus === "ACTIVE")
-      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
     }
@@ -102,12 +100,12 @@ const OurLawyersPage = () => {
 
   const fetchServices = async () => {
     try {
-      const response = await fetch(API_SERVICE);
-      if (!response.ok) {
-        throw new Error("Failed to fetch services");
+      const response = await serviceApi.getAll();
+      if (response.data) {
+        setServices(response.data);
+      } else {
+        console.error("Failed to fetch services:", response.error);
       }
-      const data = await response.json();
-      setServices(data);
     } catch (err) {
       console.error("Failed to fetch services:", err);
     }

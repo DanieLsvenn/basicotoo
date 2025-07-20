@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
 import { MaxWidthWrapper } from "@/components/max-width-wrapper";
+import { API_ENDPOINTS, apiFetch } from "@/lib/api-utils";
 
 interface User {
   accountId: string;
@@ -15,8 +16,6 @@ interface User {
   image?: string;
   status: "ACTIVE" | "INACTIVE";
 }
-
-const API_BASE_URL = "https://localhost:7218/api/Account";
 
 const UserListPage = () => {
   const [users, setUsers] = useState<User[]>([]);
@@ -28,10 +27,12 @@ const UserListPage = () => {
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/all-user`);
-      if (!res.ok) throw new Error("Failed to fetch users");
-      const data = await res.json();
-      setUsers(Array.isArray(data) ? data : data.data || []);
+      const response = await apiFetch(API_ENDPOINTS.ACCOUNT.ALL_USERS);
+      if (response.data) {
+        setUsers(Array.isArray(response.data) ? response.data : response.data.data || []);
+      } else {
+        throw new Error("Failed to fetch users");
+      }
     } catch (err) {
       toast.error("Error loading users");
     } finally {
@@ -45,10 +46,12 @@ const UserListPage = () => {
     if (!searchPhone.trim()) return;
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE_URL}?phone=${searchPhone}`);
-      if (!res.ok) throw new Error("User not found");
-      const user = await res.json();
-      setUsers(user ? [user] : []);
+      const response = await apiFetch(`${API_ENDPOINTS.ACCOUNT.USER_BY_PHONE}?phone=${searchPhone}`);
+      if (response.data) {
+        setUsers(response.data ? [response.data] : []);
+      } else {
+        throw new Error("User not found");
+      }
     } catch (err) {
       toast.error("User not found");
       setUsers([]);
@@ -62,12 +65,15 @@ const UserListPage = () => {
     if (!window.confirm("Are you sure you want to ban this user?")) return;
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/user/${id}`, {
+      const response = await apiFetch(API_ENDPOINTS.ACCOUNT.USER_BY_ID(id), {
         method: "DELETE",
       });
-      if (!res.ok) throw new Error("Failed to ban user");
-      toast.success("User banned");
-      fetchUsers();
+      if (response.data) {
+        toast.success("User banned");
+        fetchUsers();
+      } else {
+        throw new Error("Failed to ban user");
+      }
     } catch (err) {
       toast.error("Error banning user");
     } finally {
@@ -79,12 +85,15 @@ const UserListPage = () => {
   const handleUnban = async (id: string) => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/active-user/${id}`, {
+      const response = await apiFetch(API_ENDPOINTS.ACCOUNT.ACTIVATE_USER(id), {
         method: "PUT",
       });
-      if (!res.ok) throw new Error("Failed to unban user");
-      toast.success("User unbanned");
-      fetchUsers();
+      if (response.data) {
+        toast.success("User unbanned");
+        fetchUsers();
+      } else {
+        throw new Error("Failed to unban user");
+      }
     } catch (err) {
       toast.error("Error unbanning user");
     } finally {

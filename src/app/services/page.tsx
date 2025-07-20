@@ -17,6 +17,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { Search, Loader2 } from "lucide-react";
 import { assets } from "../../../public/assets/assets";
+import { apiFetch, API_ENDPOINTS } from "@/lib/api-utils";
 
 interface FormTemplate {
   formTemplateId?: string;
@@ -33,9 +34,6 @@ interface Service {
   serviceDescription: string;
   status: "Active" | "Inactive";
 }
-
-const API_URL = "https://localhost:7218/api/Service";
-const TEMPLATES_API_URL = "https://localhost:7276/api/templates-active";
 
 // Fixed image mapping for service types
 const SERVICE_IMAGE_MAP: { keyword: string; image: string }[] = [
@@ -159,12 +157,11 @@ export default function UserServicesPage() {
 
   const fetchServices = useCallback(async () => {
     try {
-      const res = await fetch(API_URL);
-      if (!res.ok) {
-        throw new Error(`Failed to fetch services: ${res.status}`);
+      const response = await apiFetch(API_ENDPOINTS.SERVICE.BASE);
+      if (!response.data) {
+        throw new Error(response.error || "Failed to fetch services");
       }
-      const data: Service[] = await res.json();
-      setServices(data);
+      setServices(response.data);
       setError(null);
     } catch (err) {
       console.error("Failed to fetch services", err);
@@ -174,12 +171,11 @@ export default function UserServicesPage() {
 
   const fetchFormTemplates = useCallback(async () => {
     try {
-      const response = await fetch(TEMPLATES_API_URL);
-      if (!response.ok) {
-        throw new Error("Failed to fetch form templates");
+      const response = await apiFetch(API_ENDPOINTS.FORM.TEMPLATES_ACTIVE);
+      if (!response.data) {
+        throw new Error(response.error || "Failed to fetch form templates");
       }
-      const data = await response.json();
-      setFormTemplates(data);
+      setFormTemplates(response.data);
       setTemplatesError(null);
     } catch (err) {
       console.error("Error fetching form templates:", err);

@@ -23,6 +23,7 @@ import { Plus, Edit, Trash2, Search, Loader2, Camera } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
 import { MaxWidthWrapper } from "@/components/max-width-wrapper";
+import { API_ENDPOINTS, apiFetch } from "@/lib/api-utils";
 
 interface Staff {
   staffId?: string;
@@ -34,8 +35,6 @@ interface Staff {
   imageUrl: string;
   status?: "ACTIVE" | "INACTIVE";
 }
-
-const API_BASE_URL = "https://localhost:7218/api/Staff";
 
 const initialFormData = {
   username: "",
@@ -66,21 +65,18 @@ export default function StaffPage() {
     try {
       // Fetch both all staff and active staff
       const [allStaffResponse, activeStaffResponse] = await Promise.all([
-        fetch(`${API_BASE_URL}?page=1&pageSize=100`),
-        fetch(`${API_BASE_URL}/Active?page=1&pageSize=100`),
+        apiFetch(API_ENDPOINTS.STAFF.PAGINATED(1, 100)),
+        apiFetch(API_ENDPOINTS.STAFF.ACTIVE_PAGINATED(1, 100)),
       ]);
 
-      if (allStaffResponse.ok && activeStaffResponse.ok) {
-        const allStaffData = await allStaffResponse.json();
-        const activeStaffData = await activeStaffResponse.json();
-
+      if (allStaffResponse.data && activeStaffResponse.data) {
         // Handle both possible response formats
-        const allStaff = Array.isArray(allStaffData)
-          ? allStaffData
-          : allStaffData.data || [];
-        const activeStaff = Array.isArray(activeStaffData)
-          ? activeStaffData
-          : activeStaffData.data || [];
+        const allStaff = Array.isArray(allStaffResponse.data)
+          ? allStaffResponse.data
+          : allStaffResponse.data.data || [];
+        const activeStaff = Array.isArray(activeStaffResponse.data)
+          ? activeStaffResponse.data
+          : activeStaffResponse.data.data || [];
 
         // Create a set of active staff IDs for quick lookup
         const activeStaffIds = new Set(
@@ -162,7 +158,7 @@ export default function StaffPage() {
   const createStaff = async (staffData: Omit<Staff, "staffId">) => {
     try {
       console.log("Creating staff with data:", staffData);
-      const response = await fetch(API_BASE_URL, {
+      const response = await apiFetch(API_ENDPOINTS.STAFF.BASE, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -170,19 +166,17 @@ export default function StaffPage() {
         body: JSON.stringify(staffData),
       });
 
-      const responseText = await response.text();
-      console.log("Create response:", response.status, responseText);
+      console.log("Create response:", response);
 
-      if (response.ok) {
+      if (response.data) {
         setRefreshKey((prev) => prev + 1);
         return true;
       } else {
         console.error(
           "Failed to create staff member:",
-          response.status,
-          responseText
+          response.error
         );
-        toast.error(`Failed to create staff member: ${responseText}`);
+        toast.error(`Failed to create staff member: ${response.error}`);
         return false;
       }
     } catch (error) {
@@ -205,7 +199,7 @@ export default function StaffPage() {
 
       console.log("Updating staff with data:", updateData);
 
-      const response = await fetch(API_BASE_URL, {
+      const response = await apiFetch(API_ENDPOINTS.STAFF.BASE, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -213,19 +207,17 @@ export default function StaffPage() {
         body: JSON.stringify(updateData),
       });
 
-      const responseText = await response.text();
-      console.log("Update response:", response.status, responseText);
+      console.log("Update response:", response);
 
-      if (response.ok) {
+      if (response.data) {
         setRefreshKey((prev) => prev + 1);
         return true;
       } else {
         console.error(
           "Failed to update staff member:",
-          response.status,
-          responseText
+          response.error
         );
-        toast.error(`Failed to update staff member: ${responseText}`);
+        toast.error(`Failed to update staff member: ${response.error}`);
         return false;
       }
     } catch (error) {
@@ -239,23 +231,21 @@ export default function StaffPage() {
   const deleteStaff = async (id: string) => {
     try {
       console.log("Deleting staff with ID:", id);
-      const response = await fetch(`${API_BASE_URL}/${id}`, {
+      const response = await apiFetch(API_ENDPOINTS.STAFF.BY_ID(id), {
         method: "DELETE",
       });
 
-      const responseText = await response.text();
-      console.log("Delete response:", response.status, responseText);
+      console.log("Delete response:", response);
 
-      if (response.ok) {
+      if (response.data) {
         setRefreshKey((prev) => prev + 1);
         return true;
       } else {
         console.error(
           "Failed to delete staff member:",
-          response.status,
-          responseText
+          response.error
         );
-        toast.error(`Failed to delete staff member: ${responseText}`);
+        toast.error(`Failed to delete staff member: ${response.error}`);
         return false;
       }
     } catch (error) {

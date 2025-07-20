@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { API_ENDPOINTS, apiFetch } from "@/lib/api-utils";
 
 // Dynamic import for TinyMCE editor
 const DynamicEditor = dynamic(() => import("@/components/DynamicEditor"), {
@@ -62,34 +63,21 @@ export default function EditFormPage() {
 
   const fetchFormData = async () => {
     try {
-      const token = Cookies.get("authToken");
-
-      if (!token) {
-        toast.error("Please log in to edit your form");
-        router.push("/login");
-        return;
-      }
-
       // First, get the customer form data
-      const formResponse = await fetch(
-        `https://localhost:7276/api/customer-form/${customerFormId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
+      const formResponse = await apiFetch(
+        API_ENDPOINTS.FORM.CUSTOMER_FORM(customerFormId)
       );
 
-      if (!formResponse.ok) {
-        if (formResponse.status === 404) {
+      if (!formResponse.data) {
+        if (formResponse.error?.includes('404')) {
           toast.error("Form not found");
           router.push("/profile");
           return;
         }
-        throw new Error(`Failed to fetch form: ${formResponse.status}`);
+        throw new Error(`Failed to fetch form: ${formResponse.error}`);
       }
 
-      const customerForm: CustomerForm = await formResponse.json();
+      const customerForm: CustomerForm = formResponse.data;
 
       // Check if form is editable
       if (customerForm.status !== "NOTUSED") {
@@ -99,18 +87,11 @@ export default function EditFormPage() {
       }
 
       // Then fetch the template details
-      const templatesResponse = await fetch(
-        `https://localhost:7276/api/templates`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      const templatesResponse = await apiFetch(API_ENDPOINTS.FORM.TEMPLATES);
 
       let template: FormTemplate | undefined;
-      if (templatesResponse.ok) {
-        const allTemplates: FormTemplate[] = await templatesResponse.json();
+      if (templatesResponse.data) {
+        const allTemplates: FormTemplate[] = templatesResponse.data;
         template = allTemplates.find(t => t.formTemplateId === customerForm.formTemplateId);
       }
 
@@ -143,20 +124,13 @@ export default function EditFormPage() {
 
     setSaving(true);
     try {
-      const token = Cookies.get("authToken");
 
-      if (!token) {
-        toast.error("Please log in to save your form");
-        return;
-      }
-
-      const response = await fetch(
-        `https://localhost:7276/api/customer-form/${customerFormId}`,
+      const response = await apiFetch(
+        API_ENDPOINTS.FORM.CUSTOMER_FORM(customerFormId),
         {
           method: "PUT",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
             formData: editedContent,
@@ -164,8 +138,8 @@ export default function EditFormPage() {
         }
       );
 
-      if (!response.ok) {
-        throw new Error(`Failed to save form: ${response.status}`);
+      if (!response.data) {
+        throw new Error(`Failed to save form: ${response.error}`);
       }
 
       toast.success("Form saved successfully");

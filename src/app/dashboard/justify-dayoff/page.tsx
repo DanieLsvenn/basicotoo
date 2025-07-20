@@ -12,6 +12,7 @@ import {
   AlertCircle,
   Filter,
 } from "lucide-react";
+import { API_ENDPOINTS, apiFetch } from "@/lib/api-utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -86,28 +87,10 @@ const JustifyDayOffPage = () => {
 
   const fetchProfile = useCallback(async () => {
     try {
-      const token = document.cookie
-        .split("; ")
-        .find((row) => row.startsWith("authToken="))
-        ?.split("=")[1];
+      const response = await apiFetch(API_ENDPOINTS.ACCOUNT.PROFILE);
 
-      if (!token) {
-        console.error("Please login to continue");
-        return;
-      }
-
-      const response = await fetch(
-        "https://localhost:7218/api/Account/profile",
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        setProfile(data);
+      if (response.data) {
+        setProfile(response.data);
       } else {
         throw new Error("Failed to fetch profile");
       }
@@ -120,11 +103,10 @@ const JustifyDayOffPage = () => {
     if (Shifts.length > 1) return; // Only fetch if Shifts is empty or only have 1
 
     try {
-      const response = await fetch("https://localhost:7218/api/shifts");
+      const response = await apiFetch(API_ENDPOINTS.SHIFTS.ALL);
       
-      if (response.ok) {
-        const data = await response.json();
-        Shifts.push(...data);
+      if (response.data) {
+        Shifts.push(...response.data);
         console.log("Shifts fetched:", Shifts);
       } else {
         throw new Error("Failed to fetch shifts");
@@ -177,7 +159,7 @@ const JustifyDayOffPage = () => {
 
         console.log(`Auto-rejecting day off ${dayOff.dayOffId} for ${dayOff.lawyerName} on ${dayOff.dayOff}`);
 
-        const response = await fetch(`https://localhost:7218/api/day-off/justify/${dayOff.dayOffId}`, {
+        const response = await apiFetch(API_ENDPOINTS.SHIFTS.JUSTIFY_DAY_OFF(dayOff.dayOffId), {
           method: "PUT",
           headers: {
             "accept": "*/*",
@@ -186,11 +168,10 @@ const JustifyDayOffPage = () => {
           body: JSON.stringify(justifications),
         });
 
-        if (response.ok) {
+        if (response.data) {
           console.log(`Successfully auto-rejected day off ${dayOff.dayOffId}`);
         } else {
-          const errorText = await response.text();
-          console.error(`Failed to auto-reject day off ${dayOff.dayOffId}:`, response.status, errorText);
+          console.error(`Failed to auto-reject day off ${dayOff.dayOffId}:`, response.error);
         }
       } catch (error) {
         console.error(`Error auto-rejecting day off ${dayOff.dayOffId}:`, error);
@@ -209,50 +190,24 @@ const JustifyDayOffPage = () => {
       threeMonthsLater.setMonth(threeMonthsLater.getMonth() + 3);
       const toDate = formatDate(threeMonthsLater);
 
-      const token = document.cookie
-        .split("; ")
-        .find((row) => row.startsWith("authToken="))
-        ?.split("=")[1];
-
-      if (!token) {
-        console.error("Please login to continue");
-        return;
-      }
-
-      const response = await fetch(
-        `https://localhost:7218/api/day-off?fromDate=${fromDate}&toDate=${toDate}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      const response = await apiFetch(API_ENDPOINTS.SHIFTS.DAY_OFF_QUERY(fromDate, toDate));
       
-      if (response.ok) {
-        const data = await response.json();
-        console.log("All days off data from API:", data);
+      if (response.data) {
+        console.log("All days off data from API:", response.data);
         
         // Auto-reject past day offs that are still waiting
-        await autoRejectPastDayOffs(data);
+        await autoRejectPastDayOffs(response.data);
         
         // Fetch fresh data after auto-rejection
-        const refreshResponse = await fetch(
-          `https://localhost:7218/api/day-off?fromDate=${fromDate}&toDate=${toDate}`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
+        const refreshResponse = await apiFetch(API_ENDPOINTS.SHIFTS.DAY_OFF_QUERY(fromDate, toDate));
         
-        if (refreshResponse.ok) {
-          const refreshedData = await refreshResponse.json();
-          setDayOffs(refreshedData);
-          console.log("Days off state updated with", refreshedData.length, "records after auto-rejection");
+        if (refreshResponse.data) {
+          setDayOffs(refreshResponse.data);
+          console.log("Days off state updated with", refreshResponse.data.length, "records after auto-rejection");
         } else {
           // Fallback to original data if refresh fails
-          setDayOffs(data);
-          console.log("Days off state updated with", data.length, "records (refresh failed)");
+          setDayOffs(response.data);
+          console.log("Days off state updated with", response.data.length, "records (refresh failed)");
         }
       } else {
         throw new Error("Failed to fetch days off");
@@ -411,19 +366,9 @@ const JustifyDayOffPage = () => {
     });
 
     try {
-      const token = document.cookie
-        .split("; ")
-        .find((row) => row.startsWith("authToken="))
-        ?.split("=")[1];
-
-      if (!token) {
-        console.error("Please login to continue");
-        return;
-      }
-
       console.log("Justifying day off with complete data:", completeJustifications);
 
-      const response = await fetch(`https://localhost:7218/api/day-off/justify/${dayOff.dayOffId}`, {
+      const response = await apiFetch(API_ENDPOINTS.SHIFTS.JUSTIFY_DAY_OFF(dayOff.dayOffId), {
         method: "PUT",
         headers: {
           "accept": "*/*",
@@ -432,11 +377,10 @@ const JustifyDayOffPage = () => {
         body: JSON.stringify(completeJustifications),
       });
 
-      console.log("Justify response status:", response.status);
+      console.log("Justify response:", response);
 
-      if (response.ok) {
-        const data = await response.json();
-        setResponseMessage(data.message || "Day off justification completed successfully");
+      if (response.data) {
+        setResponseMessage(response.data.message || "Day off justification completed successfully");
         
         // Remove the processed justifications
         setPendingJustifications(prev => {
@@ -448,9 +392,8 @@ const JustifyDayOffPage = () => {
         // Refresh the data
         await fetchDaysOff();
       } else {
-        const errorText = await response.text();
-        console.error("Justify request failed:", response.status, errorText);
-        throw new Error(`Failed to justify day off: ${response.status} ${errorText}`);
+        console.error("Justify request failed:", response.error);
+        throw new Error(`Failed to justify day off: ${response.error}`);
       }
     } catch (error) {
       console.error("Failed to justify day off:", error);

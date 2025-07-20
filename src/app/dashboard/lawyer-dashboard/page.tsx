@@ -25,6 +25,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { apiFetch, API_ENDPOINTS } from "@/lib/api-utils";
 
 interface Profile {
   accountId: string;
@@ -150,30 +151,11 @@ const LawyerDashboard = () => {
 
   const fetchProfile = useCallback(async () => {
     try {
-      const token = document.cookie
-        .split("; ")
-        .find((row) => row.startsWith("authToken="))
-        ?.split("=")[1];
-
-      if (!token) {
-        console.error("Please login to continue");
-        return;
-      }
-
-      const response = await fetch(
-        "https://localhost:7218/api/Account/profile",
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        setProfile(data);
+      const response = await apiFetch(API_ENDPOINTS.ACCOUNT.PROFILE);
+      if (response.data) {
+        setProfile(response.data);
       } else {
-        throw new Error("Failed to fetch profile");
+        throw new Error(response.error || "Failed to fetch profile");
       }
     } catch (error) {
       console.error("Failed to fetch profile:", error);
@@ -184,14 +166,13 @@ const LawyerDashboard = () => {
     if (Shifts.length > 1) return; // Only fetch if Shifts is empty or only have 1
 
     try {
-      const response = await fetch("https://localhost:7218/api/shifts");
+      const response = await apiFetch(API_ENDPOINTS.SHIFTS.ALL);
       
-      if (response.ok) {
-        const data = await response.json();
-        Shifts.push(...data);
+      if (response.data) {
+        Shifts.push(...response.data);
         console.log("Shifts fetched:", Shifts);
       } else {
-        throw new Error("Failed to fetch shifts");
+        throw new Error(response.error || "Failed to fetch shifts");
       }
     } catch (error) {
       console.error("Failed to fetch shifts:", error);
@@ -215,29 +196,11 @@ const LawyerDashboard = () => {
       const lastDay = new Date(year, month + 1, 0);
       const toDate = formatDate(lastDay);
 
-      const token = document.cookie
-        .split("; ")
-        .find((row) => row.startsWith("authToken="))
-        ?.split("=")[1];
-
-      if (!token) {
-        console.error("Please login to continue");
-        return;
-      }
-
-      const response = await fetch(
-        `https://localhost:7218/api/day-off?fromDate=${fromDate}&toDate=${toDate}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      const response = await apiFetch(API_ENDPOINTS.SHIFTS.DAY_OFF_QUERY(fromDate, toDate));
       
-      if (response.ok) {
-        const data = await response.json();
+      if (response.data) {
         // Filter for current lawyer only
-        const lawyerDayOffs = data.filter((dayOff: DayOff) => dayOff.lawyerId === profile.accountId);
+        const lawyerDayOffs = response.data.filter((dayOff: DayOff) => dayOff.lawyerId === profile.accountId);
         
         console.log("New days off data from API:", lawyerDayOffs);
         
@@ -247,7 +210,7 @@ const LawyerDashboard = () => {
         // Small delay to ensure state update is processed
         await new Promise(resolve => setTimeout(resolve, 100));
       } else {
-        throw new Error("Failed to fetch days off");
+        throw new Error(response.error || "Failed to fetch days off");
       }
     } catch (error) {
       console.error("Failed to fetch days off:", error);
@@ -264,27 +227,20 @@ const LawyerDashboard = () => {
 
       for (const statusType of statuses) {
         try {
-          const response = await fetch(
-            `https://localhost:7286/api/Booking/lawyer-all/${profile.accountId}?status=${statusType}`
+          const response = await apiFetch(
+            API_ENDPOINTS.BOOKING.BY_LAWYER(profile.accountId, statusType)
           );
 
           console.log(
             `Fetching: lawyer-all/${profile.accountId}?status=${statusType}`
           );
-          console.log("Response status:", response.status);
 
-          if (response.status === 204) {
-            // No content, skip
-            continue;
-          }
-
-          if (response.ok) {
-            const data = await response.json();
-            allBookings.push(...data);
-          } else {
+          if (response.data) {
+            allBookings.push(...response.data);
+          } else if (response.status !== 204) {
             console.error(
               `Failed to fetch ${statusType} bookings:`,
-              response.status
+              response.error
             );
           }
         } catch (error) {
@@ -527,20 +483,15 @@ const LawyerDashboard = () => {
         console.log("Updating day off with data:", requestData);
         console.log("Day off ID:", existingDayOff.dayOffId);
 
-        const response = await fetch(`https://localhost:7218/api/day-off/${existingDayOff.dayOffId}`, {
+        const response = await apiFetch(API_ENDPOINTS.SHIFTS.DAY_OFF_BY_ID(existingDayOff.dayOffId), {
           method: "PUT",
-          headers: {
-            "accept": "*/*",
-            "Content-Type": "application/json",
-          },
           body: JSON.stringify(requestData),
         });
 
         console.log("PUT response status:", response.status);
         
-        if (response.ok) {
-          const data = await response.json();
-          setResponseMessage(data.message || "Day off schedule updated successfully");
+        if (response.data) {
+          setResponseMessage(response.data.message || "Day off schedule updated successfully");
           setSelectedShifts([]);
           // Force refresh the days off data to update UI
           console.log("PUT successful, refreshing days off data...");
@@ -549,9 +500,8 @@ const LawyerDashboard = () => {
           // Force component re-render
           setRefreshTrigger(prev => prev + 1);
         } else {
-          const errorText = await response.text();
-          console.error("PUT request failed:", response.status, errorText);
-          throw new Error(`Failed to update day off: ${response.status} ${errorText}`);
+          console.error("PUT request failed:", response.error);
+          throw new Error(`Failed to update day off: ${response.error}`);
         }
       } else {
         // Create new day off
@@ -563,20 +513,15 @@ const LawyerDashboard = () => {
 
         console.log("Creating new day off with data:", requestData);
 
-        const response = await fetch("https://localhost:7218/api/day-off", {
+        const response = await apiFetch(API_ENDPOINTS.SHIFTS.DAY_OFF, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
           body: JSON.stringify(requestData),
         });
 
         console.log("POST response status:", response.status);
 
-        if (response.ok) {
-          const data = await response.json();
-          setResponseMessage(data.message || "Day off schedule created successfully");
+        if (response.data) {
+          setResponseMessage(response.data.message || "Day off schedule created successfully");
           setSelectedShifts([]);
           // Force refresh the days off data to update UI
           console.log("POST successful, refreshing days off data...");
@@ -585,9 +530,8 @@ const LawyerDashboard = () => {
           // Force component re-render
           setRefreshTrigger(prev => prev + 1);
         } else {
-          const errorText = await response.text();
-          console.error("POST request failed:", response.status, errorText);
-          throw new Error(`Failed to register day off: ${response.status} ${errorText}`);
+          console.error("POST request failed:", response.error);
+          throw new Error(`Failed to register day off: ${response.error}`);
         }
       }
     } catch (error) {

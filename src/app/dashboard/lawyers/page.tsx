@@ -39,6 +39,7 @@ import dynamic from "next/dynamic";
 import ReactSelect, { MultiValue, ActionMeta } from "react-select";
 import { toast } from "sonner";
 import { MaxWidthWrapper } from "@/components/max-width-wrapper";
+import { API_ENDPOINTS, apiFetch } from "@/lib/api-utils";
 
 interface ServiceOption {
   serviceId: string;
@@ -62,9 +63,6 @@ interface Lawyer {
     pricePerHour: number;
   }[];
 }
-
-const API_LAWYER = "https://localhost:7218/api/Lawyer";
-const API_SERVICE = "https://localhost:7218/api/Service";
 
 const initialFormData = {
   accountUsername: "",
@@ -106,9 +104,10 @@ export default function LawyersPage() {
   const fetchLawyers = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(API_LAWYER);
-      const data = await res.json();
-      setLawyers(data);
+      const response = await apiFetch(API_ENDPOINTS.LAWYER.BASE);
+      if (response.data) {
+        setLawyers(response.data);
+      }
     } finally {
       setLoading(false);
     }
@@ -116,9 +115,10 @@ export default function LawyersPage() {
 
   // Fetch all services
   const fetchServices = useCallback(async () => {
-    const res = await fetch(API_SERVICE);
-    const data = await res.json();
-    setServices(data);
+    const response = await apiFetch(API_ENDPOINTS.SERVICE.BASE);
+    if (response.data) {
+      setServices(response.data);
+    }
   }, []);
 
   // Handle image upload
@@ -175,7 +175,7 @@ export default function LawyersPage() {
 
   // Delete a lawyer (logic)
   const deleteLawyer = async (lawyer: Lawyer) => {
-    await fetch(`${API_LAWYER}/${lawyer.accountId}`, { method: "DELETE" });
+    await apiFetch(API_ENDPOINTS.LAWYER.BASE + `/${lawyer.accountId}`, { method: "DELETE" });
     setDeleteDialogOpen(false);
     setDeleteTarget(null);
     await fetchLawyers();
@@ -245,8 +245,8 @@ export default function LawyersPage() {
 
     const method = editingLawyer ? "PUT" : "POST";
     const url = editingLawyer
-      ? `${API_LAWYER}/${editingLawyer.accountId}`
-      : API_LAWYER;
+      ? `${API_ENDPOINTS.LAWYER.BASE}/${editingLawyer.accountId}`
+      : API_ENDPOINTS.LAWYER.BASE;
 
     const payload = editingLawyer
       ? {
@@ -264,7 +264,7 @@ export default function LawyersPage() {
           serviceForLawyerDTOs: formData.serviceForLawyerDTOs,
         };
 
-    await fetch(url, {
+    await apiFetch(url, {
       method,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),

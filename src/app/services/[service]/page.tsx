@@ -22,6 +22,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { toast } from "sonner";
 import Cookies from "js-cookie";
+import { accountApi, orderApi, formApi, serviceApi, lawyerApi, API_ENDPOINTS } from "@/lib/api-utils";
 
 // Helper to generate the slug from the service name
 function getServiceSlug(serviceName: string): string {
@@ -380,15 +381,6 @@ export const purchaseFormTemplate = async (
   price: number
 ): Promise<boolean> => {
   try {
-    const token = Cookies.get("authToken");
-
-    if (!token) {
-      toast.error("Authentication required", {
-        description: "Please log in to purchase forms.",
-      });
-      return false;
-    }
-
     if (!formTemplateId) {
       toast.error("Invalid template", {
         description: "Template ID is missing.",
@@ -437,39 +429,19 @@ export const purchaseFormTemplate = async (
       JSON.stringify(purchaseRequest, null, 2)
     );
 
-    const response = await fetch(
-      "https://localhost:7024/api/order/create-form",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(purchaseRequest),
-      }
-    );
+    const response = await orderApi.createForm(purchaseRequest);
 
-    const responseText = await response.text();
-    console.log("Purchase response status:", response.status);
-    console.log("Purchase response body:", responseText);
+    console.log("Purchase response:", response);
 
-    if (response.ok) {
+    if (response.data) {
       toast.success("Form template purchased successfully!", {
         description: "The form is now available in your profile.",
       });
       return true;
     } else {
-      let errorData;
-      try {
-        errorData = JSON.parse(responseText);
-      } catch {
-        errorData = { message: responseText || "Unknown error" };
-      }
-
-      console.error("Purchase failed:", errorData);
+      console.error("Purchase failed:", response.error);
       toast.error("Purchase failed", {
-        description:
-          errorData.message || `HTTP ${response.status}: ${responseText}`,
+        description: response.error || "Unknown error occurred",
       });
       return false;
     }
@@ -485,20 +457,19 @@ export const purchaseFormTemplate = async (
 
 export const fetchFormTemplatesWithPrice = async (): Promise<any[]> => {
   const endpoints = [
-    "https://localhost:7276/api/templates",
-    "https://localhost:7276/api/template?page=1",
-    "https://localhost:7276/api/templates-active",
+    { name: 'templates', apiFn: () => formApi.getTemplates() },
+    { name: 'templates-active', apiFn: () => formApi.getActiveTemplates() },
   ];
 
   for (const endpoint of endpoints) {
     try {
-      console.log(`Trying endpoint: ${endpoint}`);
-      const response = await fetch(endpoint);
+      console.log(`Trying endpoint: ${endpoint.name}`);
+      const response = await endpoint.apiFn();
 
-      if (response.ok) {
-        const templates = await response.json();
+      if (response.data && Array.isArray(response.data)) {
+        const templates = response.data;
         console.log(
-          `Success with ${endpoint}, got ${templates.length} templates`
+          `Success with ${endpoint.name}, got ${templates.length} templates`
         );
 
         // Ensure all templates have required fields
@@ -527,7 +498,7 @@ export const fetchFormTemplatesWithPrice = async (): Promise<any[]> => {
         }
       }
     } catch (error) {
-      console.warn(`Endpoint ${endpoint} failed:`, error);
+      console.warn(`Endpoint ${endpoint.name} failed:`, error);
       continue;
     }
   }
@@ -540,28 +511,15 @@ export const getUserProfile = async (): Promise<{
   accountId: string;
 } | null> => {
   try {
-    const token = Cookies.get("authToken");
-    if (!token) {
-      console.warn("No auth token found");
-      return null;
-    }
-
-    const response = await fetch("https://localhost:7218/api/Account/profile", {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-
-    if (response.ok) {
-      const profile = await response.json();
-      console.log("Profile fetched:", profile);
+    const response = await accountApi.getProfile();
+    if (response.data) {
+      console.log("Profile fetched:", response.data);
       return {
-        accountTicketRequest: profile.accountTicketRequest || 0,
-        accountId: profile.accountId,
+        accountTicketRequest: response.data.accountTicketRequest || 0,
+        accountId: response.data.accountId,
       };
     } else {
-      const errorText = await response.text();
-      console.error("Profile fetch failed:", response.status, errorText);
+      console.error("Profile fetch failed:", response.error);
     }
     return null;
   } catch (error) {
@@ -672,9 +630,9 @@ export default function UserServiceDetailPage() {
 
     try {
       // First, try to fetch from services
-      const serviceResponse = await fetch("https://localhost:7218/api/Service");
-      if (serviceResponse.ok) {
-        const serviceData: Service[] = await serviceResponse.json();
+      const serviceResponse = await serviceApi.getAll();
+      if (serviceResponse.data) {
+        const serviceData: Service[] = serviceResponse.data;
         const foundService = serviceData.find(
           (s) => getServiceSlug(s.serviceName) === serviceSlug
         );
@@ -701,38 +659,20 @@ export default function UserServiceDetailPage() {
 
       try {
         // First try the all templates endpoint (works in dashboard)
-        const templateResponse = await fetch(
-          "https://localhost:7276/api/templates"
-        );
-        if (templateResponse.ok) {
-          templateData = await templateResponse.json();
+        const templateResponse = await formApi.getTemplates();
+        if (templateResponse.data) {
+          templateData = templateResponse.data;
         }
       } catch (err) {
-        console.warn("All templates endpoint failed, trying paginated:", err);
+        console.warn("All templates endpoint failed:", err);
       }
 
-      // If that fails, try the paginated endpoint
+      // If that fails, try active templates endpoint
       if (templateData.length === 0) {
         try {
-          const paginatedResponse = await fetch(
-            "https://localhost:7276/api/template?page=1"
-          );
-          if (paginatedResponse.ok) {
-            templateData = await paginatedResponse.json();
-          }
-        } catch (err) {
-          console.warn("Paginated endpoint failed:", err);
-        }
-      }
-
-      // If that also fails, try active templates endpoint
-      if (templateData.length === 0) {
-        try {
-          const activeResponse = await fetch(
-            "https://localhost:7276/api/templates-active"
-          );
-          if (activeResponse.ok) {
-            templateData = await activeResponse.json();
+          const activeResponse = await formApi.getActiveTemplates();
+          if (activeResponse.data) {
+            templateData = activeResponse.data;
           }
         } catch (err) {
           console.warn("Active templates endpoint failed:", err);
@@ -780,15 +720,13 @@ export default function UserServiceDetailPage() {
     setLawyersLoading(true);
 
     try {
-      const response = await fetch(
-        `https://localhost:7218/api/Lawyer/service/${serviceId}`
-      );
-      if (!response.ok) {
-        throw new Error(`Failed to fetch lawyers: ${response.status}`);
+      const response = await lawyerApi.getByService(serviceId);
+      if (response.data) {
+        const data: Lawyer[] = response.data;
+        setLawyers(data);
+      } else {
+        throw new Error(response.error || "Failed to fetch lawyers");
       }
-
-      const data: Lawyer[] = await response.json();
-      setLawyers(data);
     } catch (error) {
       console.error("Failed to fetch lawyers:", error);
       setLawyers([]);

@@ -38,9 +38,9 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { MaxWidthWrapper } from "@/components/max-width-wrapper";
+import { API_ENDPOINTS, apiFetch } from "@/lib/api-utils";
 
 // Constants
-const API_BASE_URL = "https://localhost:7103/api";
 const STATUS_OPTIONS = ["ACTIVE", "INACTIVE"] as const;
 const CURRENCY_OPTIONS = ["VND", "USD"] as const;
 
@@ -91,7 +91,7 @@ export default function TicketPackagesPage() {
 
   // API request wrapper
   const apiRequest = useCallback(async (url: string, options?: RequestInit) => {
-    const response = await fetch(`${API_BASE_URL}${url}`, {
+    const response = await apiFetch(`${API_ENDPOINTS.TICKET.BASE}${url}`, {
       headers: {
         "Content-Type": "application/json",
         ...options?.headers,
@@ -99,12 +99,11 @@ export default function TicketPackagesPage() {
       ...options,
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`API Error (${response.status}): ${errorText}`);
+    if (response.error) {
+      throw new Error(`API Error: ${response.error}`);
     }
 
-    return response.json();
+    return response.data;
   }, []);
 
   // Fetch packages
@@ -429,20 +428,19 @@ export default function TicketPackagesPage() {
   }, [fetchPackages]);
 
   useEffect(() => {
-    fetch(
-      "https://api.getgeoapi.com/v2/currency/convert?api_key=05585d2dbe81b54873e6a5ec72b0ad7e423bbcc0&from=USD&to=VND&amount=1&format=json"
+    apiFetch(
+      API_ENDPOINTS.EXTERNAL.CURRENCY_CONVERT("05585d2dbe81b54873e6a5ec72b0ad7e423bbcc0", "USD", "VND", 1)
     )
-      .then((res) => res.json())
-      .then((data) => {
+      .then((response) => {
         // Check if the response is successful and has the expected structure
         if (
-          data &&
-          data.status === "success" &&
-          data.rates &&
-          data.rates.VND &&
-          data.rates.VND.rate
+          response.data &&
+          response.data.status === "success" &&
+          response.data.rates &&
+          response.data.rates.VND &&
+          response.data.rates.VND.rate
         ) {
-          setUsdToVndRate(Number(data.rates.VND.rate));
+          setUsdToVndRate(Number(response.data.rates.VND.rate));
         }
       })
       .catch(() => {

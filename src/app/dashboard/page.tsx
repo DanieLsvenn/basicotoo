@@ -30,6 +30,8 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { Calendar, CalendarDays, RefreshCw } from "lucide-react";
+import { apiFetch, API_ENDPOINTS } from "@/lib/api-utils";
+import Cookies from "js-cookie";
 
 // Type definitions
 interface AccountData {
@@ -105,12 +107,9 @@ const Dashboard: React.FC = () => {
   // Fetch account data
   const fetchAccountData = async (): Promise<void> => {
     try {
-      const response = await fetch(
-        "https://localhost:7218/api/Dashboard/account"
-      );
-      if (!response.ok) throw new Error("Failed to fetch account data");
-      const data: AccountData = await response.json();
-      setAccountData(data);
+      const response = await apiFetch(API_ENDPOINTS.DASHBOARD.ACCOUNT);
+      if (!response.data) throw new Error(response.error || "Failed to fetch account data");
+      setAccountData(response.data);
     } catch (error) {
       showToast("Failed to fetch account data");
       console.error("Account data error:", error);
@@ -123,12 +122,11 @@ const Dashboard: React.FC = () => {
     endDate: string
   ): Promise<void> => {
     try {
-      const response = await fetch(
-        `https://localhost:7024/api/Dashboard/revenue?startDate=${startDate}&endDate=${endDate}&groupBy=yearly`
+      const response = await apiFetch(
+        API_ENDPOINTS.DASHBOARD.REVENUE_YEARLY(startDate, endDate)
       );
-      if (!response.ok) throw new Error("Failed to fetch yearly revenue");
-      const data: RevenueData | RevenueData[] = await response.json();
-      setYearlyRevenue(Array.isArray(data) ? data : [data]);
+      if (!response.data) throw new Error(response.error || "Failed to fetch yearly revenue");
+      setYearlyRevenue(Array.isArray(response.data) ? response.data : [response.data]);
     } catch (error) {
       showToast("Failed to fetch yearly revenue");
       console.error("Yearly revenue error:", error);
@@ -141,12 +139,11 @@ const Dashboard: React.FC = () => {
     endDate: string
   ): Promise<void> => {
     try {
-      const response = await fetch(
-        `https://localhost:7024/api/Dashboard/revenue?startDate=${startDate}&endDate=${endDate}&groupBy=monthly`
+      const response = await apiFetch(
+        API_ENDPOINTS.DASHBOARD.REVENUE_MONTHLY(startDate, endDate)
       );
-      if (!response.ok) throw new Error("Failed to fetch monthly revenue");
-      const data: RevenueData | RevenueData[] = await response.json();
-      setMonthlyRevenue(Array.isArray(data) ? data : [data]);
+      if (!response.data) throw new Error(response.error || "Failed to fetch monthly revenue");
+      setMonthlyRevenue(Array.isArray(response.data) ? response.data : [response.data]);
     } catch (error) {
       showToast("Failed to fetch monthly revenue");
       console.error("Monthly revenue error:", error);
@@ -159,12 +156,11 @@ const Dashboard: React.FC = () => {
     endDate: string
   ): Promise<void> => {
     try {
-      const response = await fetch(
-        `https://localhost:7024/api/Dashboard/revenue?startDate=${startDate}&endDate=${endDate}&groupBy=daily`
+      const response = await apiFetch(
+        API_ENDPOINTS.DASHBOARD.REVENUE_DAILY(startDate, endDate)
       );
-      if (!response.ok) throw new Error("Failed to fetch daily revenue");
-      const data: RevenueData | RevenueData[] = await response.json();
-      setDailyRevenue(Array.isArray(data) ? data : [data]);
+      if (!response.data) throw new Error(response.error || "Failed to fetch daily revenue");
+      setDailyRevenue(Array.isArray(response.data) ? response.data : [response.data]);
     } catch (error) {
       showToast("Failed to fetch daily revenue");
       console.error("Daily revenue error:", error);

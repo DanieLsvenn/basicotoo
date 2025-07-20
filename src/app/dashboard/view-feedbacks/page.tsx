@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, Star } from "lucide-react";
+import { apiFetch, API_ENDPOINTS } from "@/lib/api-utils";
 
 interface Feedback {
   feedbackId: string;
@@ -21,10 +22,9 @@ const ViewFeedbacksPage = () => {
     const fetchFeedbacks = async () => {
       setLoading(true);
       try {
-        const res = await fetch("https://localhost:7286/api/feedbacks");
-        if (!res.ok) throw new Error("Failed to fetch feedbacks");
-        const data = await res.json();
-        setFeedbacks(data);
+        const response = await apiFetch(API_ENDPOINTS.FEEDBACK.ALL);
+        if (!response.data) throw new Error(response.error || "Failed to fetch feedbacks");
+        setFeedbacks(response.data);
       } catch (error) {
         setFeedbacks([]);
       } finally {

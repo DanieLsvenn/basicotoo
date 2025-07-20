@@ -40,6 +40,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import Cookies from "js-cookie";
+import { accountApi, bookingApi, serviceApi, lawyerApi, ticketApi, orderApi, apiFetch, API_ENDPOINTS } from "@/lib/api-utils";
 import { notFound } from "next/navigation";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -289,17 +290,12 @@ export default function CheckoutPage() {
         return;
       }
 
-      const response = await fetch("https://localhost:7218/api/Account/profile", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      const response = await accountApi.getProfile();
 
-      if (response.ok) {
-        const data = await response.json();
-        setProfile(data);
+      if (response.data) {
+        setProfile(response.data);
       } else {
-        throw new Error("Failed to fetch profile");
+        throw new Error(response.error || "Failed to fetch profile");
       }
     } catch (error) {
       console.error("Failed to fetch profile:", error);
@@ -311,17 +307,18 @@ export default function CheckoutPage() {
   // Fetch USD to VND exchange rate
   const fetchExchangeRate = useCallback(async () => {
     try {
-      const response = await fetch("https://api.getgeoapi.com/v2/currency/convert?api_key=05585d2dbe81b54873e6a5ec72b0ad7e423bbcc0&from=USD&to=VND&amount=1&format=json");
-      const data = await response.json();
+      const response = await apiFetch(
+        API_ENDPOINTS.EXTERNAL.CURRENCY_CONVERT("05585d2dbe81b54873e6a5ec72b0ad7e423bbcc0", "USD", "VND", 1)
+      );
 
       if (
-        data &&
-        data.status === "success" &&
-        data.rates &&
-        data.rates.VND &&
-        data.rates.VND.rate
+        response.data &&
+        response.data.status === "success" &&
+        response.data.rates &&
+        response.data.rates.VND &&
+        response.data.rates.VND.rate
       ) {
-        setUsdToVndRate(Number(data.rates.VND.rate));
+        setUsdToVndRate(Number(response.data.rates.VND.rate));
       }
     } catch (error) {
       console.error("Failed to fetch exchange rate:", error);
@@ -334,85 +331,73 @@ export default function CheckoutPage() {
     if (!profile?.accountId || mode !== "booking") return;
 
     try {
-      const response = await fetch(
-        `https://localhost:7286/api/Booking?customerId=${profile.accountId}&status=Pending`
-      );
+      const response = await bookingApi.getByCustomer(profile.accountId, "Pending");
 
-      if (response.status === 204) {
+      if (response.status === 204 || !response.data) {
         // No content, skip further processing
         setPendingBookings([]);
         return;
       }
 
-      if (response.ok) {
-        const data: PendingBooking[] = await response.json();
+      const data: PendingBooking[] = response.data;
+      
+      // Filter out expired bookings and auto-cancel them
+      const validBookings: PendingBooking[] = [];
+      const expiredBookings: PendingBooking[] = [];
+      
+      data.forEach(booking => {
+        if (isBookingExpired(booking.bookingDate)) {
+          expiredBookings.push(booking);
+        } else {
+          validBookings.push(booking);
+        }
+      });
+      
+      // Auto-cancel expired bookings in the background
+      if (expiredBookings.length > 0) {
+        console.log(`Found ${expiredBookings.length} expired booking(s), auto-cancelling...`);
         
-        // Filter out expired bookings and auto-cancel them
-        const validBookings: PendingBooking[] = [];
-        const expiredBookings: PendingBooking[] = [];
-        
-        data.forEach(booking => {
-          if (isBookingExpired(booking.bookingDate)) {
-            expiredBookings.push(booking);
-          } else {
-            validBookings.push(booking);
+        // Cancel expired bookings without blocking the UI
+        const cancellationPromises = expiredBookings.map(async (expiredBooking) => {
+          try {
+            const response = await bookingApi.delete(expiredBooking.bookingId);
+            
+            if (response.data || response.status < 400) {
+              console.log(`Auto-cancelled expired booking: ${expiredBooking.bookingId} (Date: ${expiredBooking.bookingDate})`);
+              return { success: true, bookingId: expiredBooking.bookingId };
+            } else {
+              throw new Error(response.error || `HTTP ${response.status}`);
+            }
+          } catch (error) {
+            console.error(`Failed to auto-cancel expired booking ${expiredBooking.bookingId}:`, error);
+            return { success: false, bookingId: expiredBooking.bookingId, error };
           }
         });
         
-        // Auto-cancel expired bookings in the background
-        if (expiredBookings.length > 0) {
-          console.log(`Found ${expiredBookings.length} expired booking(s), auto-cancelling...`);
+        // Process cancellation results
+        Promise.all(cancellationPromises).then((results) => {
+          const successful = results.filter(r => r.success).length;
+          const failed = results.filter(r => !r.success).length;
           
-          // Cancel expired bookings without blocking the UI
-          const cancellationPromises = expiredBookings.map(async (expiredBooking) => {
-            try {
-              const token = Cookies.get("authToken");
-              if (!token) return { success: false, bookingId: expiredBooking.bookingId, error: "No auth token" };
-              
-              const response = await fetch(`https://localhost:7286/api/Booking/${expiredBooking.bookingId}`, {
-                method: "DELETE",
-                headers: {
-                  Authorization: `Bearer ${token}`,
-                },
-              });
-              
-              if (response.ok) {
-                console.log(`Auto-cancelled expired booking: ${expiredBooking.bookingId} (Date: ${expiredBooking.bookingDate})`);
-                return { success: true, bookingId: expiredBooking.bookingId };
-              } else {
-                throw new Error(`HTTP ${response.status}`);
-              }
-            } catch (error) {
-              console.error(`Failed to auto-cancel expired booking ${expiredBooking.bookingId}:`, error);
-              return { success: false, bookingId: expiredBooking.bookingId, error };
-            }
-          });
-          
-          // Process cancellation results
-          Promise.all(cancellationPromises).then((results) => {
-            const successful = results.filter(r => r.success).length;
-            const failed = results.filter(r => !r.success).length;
-            
-            if (successful > 0) {
-              toast.success(`Cleaned up ${successful} expired booking(s)`);
-            }
-            if (failed > 0) {
-              console.warn(`Failed to cancel ${failed} expired booking(s)`);
-            }
-          });
-        }
-        
-        // Set only valid (non-expired) bookings
-        setPendingBookings(validBookings);
+          if (successful > 0) {
+            toast.success(`Cleaned up ${successful} expired booking(s)`);
+          }
+          if (failed > 0) {
+            console.warn(`Failed to cancel ${failed} expired booking(s)`);
+          }
+        });
+      }
+      
+      // Set only valid (non-expired) bookings
+      setPendingBookings(validBookings);
 
-        // Check if there's a pending booking for this service and lawyer
-        const matchingBooking = validBookings.find(
-          booking => booking.serviceId === serviceId && booking.lawyerId === lawyerId
-        );
+      // Check if there's a pending booking for this service and lawyer
+      const matchingBooking = validBookings.find(
+        booking => booking.serviceId === serviceId && booking.lawyerId === lawyerId
+      );
 
-        if (matchingBooking) {
-          setBookingId(matchingBooking.bookingId);
-        }
+      if (matchingBooking) {
+        setBookingId(matchingBooking.bookingId);
       }
     } catch (error) {
       console.error("Failed to fetch pending bookings:", error);
@@ -423,20 +408,9 @@ export default function CheckoutPage() {
     setCancellingBookings(prev => new Set([...prev, cancelBookingId]));
 
     try {
-      const token = Cookies.get("authToken");
-      if (!token) {
-        toast.error("Authentication required");
-        return;
-      }
+      const response = await bookingApi.delete(cancelBookingId);
 
-      const response = await fetch(`https://localhost:7286/api/Booking/${cancelBookingId}`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (response.ok) {
+      if (response.data || response.status < 400) {
         toast.success("Booking cancelled successfully");
         // Instantly update UI by removing the cancelled booking from state
         setPendingBookings(prev => prev.filter(booking => booking.bookingId !== cancelBookingId));
@@ -445,8 +419,7 @@ export default function CheckoutPage() {
           setBookingId(null);
         }
       } else {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to cancel booking");
+        throw new Error(response.error || "Failed to cancel booking");
       }
     } catch (error) {
       console.error("Failed to cancel booking:", error);
@@ -464,12 +437,10 @@ export default function CheckoutPage() {
     if (mode !== "booking") return;
 
     try {
-      const response = await fetch(`https://localhost:7218/api/Service/${serviceId}`);
-      if (!response.ok) throw new Error("Failed to fetch services");
+      const response = await serviceApi.getById(serviceId);
+      if (!response.data) throw new Error(response.error || "Service not found");
 
-      const foundService = await response.json();
-      if (!foundService) throw new Error("Service not found");
-      setService(foundService);
+      setService(response.data);
     } catch (error) {
       console.error("Failed to fetch service:", error);
       setError("Failed to load service details");
@@ -480,10 +451,10 @@ export default function CheckoutPage() {
     if (mode !== "booking") return;
 
     try {
-      const response = await fetch(`https://localhost:7218/api/Lawyer/service/${serviceId}`);
-      if (!response.ok) throw new Error("Failed to fetch lawyers");
+      const response = await lawyerApi.getByService(serviceId);
+      if (!response.data) throw new Error(response.error || "Failed to fetch lawyers");
 
-      const lawyers: Lawyer[] = await response.json();
+      const lawyers: Lawyer[] = response.data;
       const foundLawyer = lawyers.find(l => l.lawyerId === lawyerId);
 
       if (!foundLawyer) throw new Error("Lawyer not found");
@@ -501,13 +472,13 @@ export default function CheckoutPage() {
     setSlotsLoading(true);
     try {
       const formattedDate = formatDate(date);
-      const response = await fetch(
-        `https://localhost:7286/api/Slot/free-slot?lawyerId=${lawyerId}&date=${formattedDate}`
+      const response = await apiFetch(
+        API_ENDPOINTS.SLOT.FREE_SLOTS(lawyerId, formattedDate)
       );
 
-      if (!response.ok) throw new Error("Failed to fetch available slots");
+      if (!response.data) throw new Error(response.error || "Failed to fetch available slots");
 
-      const slots: Slot[] = await response.json();
+      const slots: Slot[] = response.data;
       slots.sort((a, b) => a.slotStartTime.localeCompare(b.slotStartTime));
       setAvailableSlots(slots);
       setSelectedSlots([]);
@@ -541,10 +512,10 @@ export default function CheckoutPage() {
     if (mode !== "ticket") return;
 
     try {
-      const response = await fetch("https://localhost:7103/api/ticket-packages-active");
-      if (!response.ok) throw new Error("Failed to fetch ticket packages");
+      const response = await ticketApi.getActivePackages();
+      if (!response.data) throw new Error(response.error || "Failed to fetch ticket packages");
 
-      const packages: TicketPackage[] = await response.json();
+      const packages: TicketPackage[] = response.data;
       const foundPackage = packages.find(pkg => pkg.ticketPackageId === ticketPackageId);
 
       if (!foundPackage) throw new Error("Ticket package not found");
@@ -559,25 +530,23 @@ export default function CheckoutPage() {
     if (!profile?.accountId || mode !== "ticket") return;
 
     try {
-      const response = await fetch(`https://localhost:7024/api/orders`);
+      const response = await orderApi.getAll();
 
-      if (response.status === 204) {
+      if (response.status === 204 || !response.data) {
         setPendingOrders([]);
         return;
       }
 
-      if (response.ok) {
-        const data: PendingOrder[] = await response.json();
-        // Filter for current user and pending status
-        console.log("Fetched pending orders:", data);
-        const filteredOrders = data.filter(
-          order =>
-            order.userId === profile.accountId &&
-            order.status === "Pending"
-        );
-        console.log("Pending orders:", filteredOrders);
-        setPendingOrders(filteredOrders);
-      }
+      const data: PendingOrder[] = response.data;
+      // Filter for current user and pending status
+      console.log("Fetched pending orders:", data);
+      const filteredOrders = data.filter(
+        order =>
+          order.userId === profile.accountId &&
+          order.status === "Pending"
+      );
+      console.log("Pending orders:", filteredOrders);
+      setPendingOrders(filteredOrders);
     } catch (error) {
       console.error("Failed to fetch pending orders:", error);
     }
@@ -587,26 +556,14 @@ export default function CheckoutPage() {
     setCancellingOrders(prev => new Set([...prev, orderId]));
 
     try {
-      const token = Cookies.get("authToken");
-      if (!token) {
-        toast.error("Authentication required");
-        return;
-      }
+      const response = await orderApi.delete(orderId);
 
-      const response = await fetch(`https://localhost:7024/api/order/${orderId}`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (response.ok) {
+      if (response.data || response.status < 400) {
         toast.success("Order cancelled successfully");
         // Instantly update UI by removing the cancelled order from state
         setPendingOrders(prev => prev.filter(order => order.orderId !== orderId));
       } else {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to cancel order");
+        throw new Error(response.error || "Failed to cancel order");
       }
     } catch (error) {
       console.error("Failed to cancel order:", error);
@@ -693,12 +650,6 @@ export default function CheckoutPage() {
 
     setBooking(true);
     try {
-      const token = Cookies.get("authToken");
-      if (!token) {
-        router.push("/sign-in");
-        return;
-      }
-
       const bookingData = {
         bookingDate: formatDate(selectedDate),
         price: lawyer.pricePerHour * selectedSlots.length,
@@ -709,23 +660,15 @@ export default function CheckoutPage() {
         slotId: selectedSlots
       };
 
-      const response = await fetch("https://localhost:7286/api/Booking", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(bookingData),
-      });
+      const response = await bookingApi.create(bookingData);
 
-      if (response.ok) {
-        const data = await response.json();
+      if (response.data) {
+        const data = response.data;
         setBookingId(data.bookingId);
         toast.success("Booking created successfully! Redirecting to payment...");
         await handleOrder(data.bookingId, lawyer.pricePerHour * selectedSlots.length);
       } else {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to create booking");
+        throw new Error(response.error || "Failed to create booking");
       }
     } catch (error) {
       console.error("Booking failed:", error);
@@ -741,12 +684,6 @@ export default function CheckoutPage() {
 
     setOrderProcessing(true);
     try {
-      const token = Cookies.get("authToken");
-      if (!token) {
-        router.push("/sign-in");
-        return;
-      }
-
       const orderData = {
         userId: profile.accountId,
         ticketPackageId: ticketPackageId,
@@ -756,22 +693,13 @@ export default function CheckoutPage() {
 
       console.log(orderData);
 
-      const response = await fetch("https://localhost:7024/api/order/ticket-package", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(orderData),
-      });
+      const response = await orderApi.createTicketPackage(orderData);
 
-      if (response.ok) {
-        const data = await response.json();
+      if (response.data) {
         toast.success("Order created successfully! Redirecting to payment...");
-        await handleOrder(null, null, data.orderId);
+        await handleOrder(null, null, response.data.orderId);
       } else {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to create order");
+        throw new Error(response.error || "Failed to create order");
       }
     } catch (error) {
       console.error("Order failed:", error);
@@ -815,22 +743,10 @@ export default function CheckoutPage() {
         };
       }
 
-      const response = await fetch("https://localhost:7024/api/Payment/create-payment-url", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(paymentData),
-      });
+      const response = await orderApi.createPaymentUrl(paymentData);
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to create payment URL");
-      }
-
-      const data = await response.json();
-      if (data.url) {
-        window.location.href = data.url;
+      if (response.data && response.data.url) {
+        window.location.href = response.data.url;
       } else {
         toast.error("No payment URL returned from server.");
       }

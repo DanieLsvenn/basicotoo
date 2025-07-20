@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/card";
 import { Plus, Edit, Trash2, Search, Loader2 } from "lucide-react";
 import { MaxWidthWrapper } from "@/components/max-width-wrapper";
+import { API_ENDPOINTS, apiFetch } from "@/lib/api-utils";
 
 interface Service {
   serviceId: string;
@@ -29,8 +30,6 @@ interface Service {
   serviceDescription: string;
   status: "Active" | "Inactive";
 }
-
-const API_URL = "https://localhost:7218/api/Service";
 
 export default function ServicesPage() {
   const [loading, setLoading] = useState(true);
@@ -52,10 +51,12 @@ export default function ServicesPage() {
   const fetchServices = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(API_URL);
-      if (!res.ok) throw new Error("Failed to fetch services");
-      const data = await res.json();
-      setServices(data);
+      const response = await apiFetch(API_ENDPOINTS.SERVICE.BASE);
+      if (response.data) {
+        setServices(response.data);
+      } else {
+        throw new Error("Failed to fetch services");
+      }
     } catch (err) {
       console.error("Failed to fetch services", err);
     } finally {
@@ -67,26 +68,50 @@ export default function ServicesPage() {
     serviceName: string;
     serviceDescription: string;
   }) => {
-    await fetch(API_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
+    try {
+      const response = await apiFetch(API_ENDPOINTS.SERVICE.BASE, {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+      if (response.error) {
+        throw new Error("Failed to create service");
+      }
+      await fetchServices();
+    } catch (err) {
+      console.error("Failed to create service", err);
+    }
   };
 
   const updateService = async (
     service: Service,
     data: { serviceName: string; serviceDescription: string }
   ) => {
-    await fetch(`${API_URL}/${service.serviceId}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ serviceId: service.serviceId, ...data }),
-    });
+    try {
+      const response = await apiFetch(`${API_ENDPOINTS.SERVICE.BASE}/${service.serviceId}`, {
+        method: "PUT",
+        body: JSON.stringify({ serviceId: service.serviceId, ...data }),
+      });
+      if (response.error) {
+        throw new Error("Failed to update service");
+      }
+      await fetchServices();
+    } catch (err) {
+      console.error("Failed to update service", err);
+    }
   };
 
   const deleteService = async (service: Service) => {
-    await fetch(`${API_URL}/${service.serviceId}`, { method: "DELETE" });
+    try {
+      const response = await apiFetch(`${API_ENDPOINTS.SERVICE.BASE}/${service.serviceId}`, { 
+        method: "DELETE" 
+      });
+      if (response.error) {
+        throw new Error("Failed to delete service");
+      }
+      await fetchServices();
+    } catch (err) {
+      console.error("Failed to delete service", err);
+    }
   };
 
   // --- HANDLER METHODS ---

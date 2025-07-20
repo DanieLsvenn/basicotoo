@@ -2,9 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { Loader2, Package, ArrowRight, ChevronDown, ChevronUp } from "lucide-react";
-
-// Constants
-const API_BASE_URL = "https://localhost:7103/api";
+import { API_ENDPOINTS, apiFetch } from "@/lib/api-utils";
 
 // Types
 interface TicketPackage {
@@ -61,7 +59,7 @@ const BuyTicketsPage = () => {
 
   // API request wrapper
   const apiRequest = useCallback(async (url: string, options?: RequestInit) => {
-    const response = await fetch(`${API_BASE_URL}${url}`, {
+    const response = await apiFetch(`${API_ENDPOINTS.TICKET.BASE}${url}`, {
       headers: {
         "Content-Type": "application/json",
         ...options?.headers,
@@ -69,12 +67,11 @@ const BuyTicketsPage = () => {
       ...options,
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`API Error (${response.status}): ${errorText}`);
+    if (response.error) {
+      throw new Error(`API Error: ${response.error}`);
     }
 
-    return response.json();
+    return response.data;
   }, []);
 
   // Fetch active packages
@@ -154,17 +151,16 @@ const BuyTicketsPage = () => {
 
   useEffect(() => {
     // Fetch USD to VND exchange rate
-    fetch("https://api.getgeoapi.com/v2/currency/convert?api_key=05585d2dbe81b54873e6a5ec72b0ad7e423bbcc0&from=USD&to=VND&amount=1&format=json")
-      .then(res => res.json())
-      .then(data => {
+    apiFetch(API_ENDPOINTS.EXTERNAL.CURRENCY_CONVERT("05585d2dbe81b54873e6a5ec72b0ad7e423bbcc0", "USD", "VND", 1))
+      .then(response => {
         if (
-          data &&
-          data.status === "success" &&
-          data.rates &&
-          data.rates.VND &&
-          data.rates.VND.rate
+          response.data &&
+          response.data.status === "success" &&
+          response.data.rates &&
+          response.data.rates.VND &&
+          response.data.rates.VND.rate
         ) {
-          setUsdToVndRate(Number(data.rates.VND.rate));
+          setUsdToVndRate(Number(response.data.rates.VND.rate));
         }
       })
       .catch(() => {

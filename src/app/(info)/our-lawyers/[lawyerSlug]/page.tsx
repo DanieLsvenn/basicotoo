@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import { accountApi, serviceApi, lawyerApi, API_ENDPOINTS } from "@/lib/api-utils";
 
 interface ServiceForLawyer {
   serviceId: string;
@@ -45,9 +46,6 @@ interface Service {
   serviceName: string;
   status: "Active" | "Inactive";
 }
-
-const API_LAWYER = "https://localhost:7218/api/Lawyer";
-const API_SERVICE = "https://localhost:7218/api/Service";
 
 const LawyerDetailPage = () => {
   const params = useParams();
@@ -136,20 +134,19 @@ const LawyerDetailPage = () => {
 
   const fetchLawyer = async (lawyerId: string) => {
     try {
-      const response = await fetch(`${API_LAWYER}/${lawyerId}`);
-      if (!response.ok) {
-        if (response.status === 404) {
+      const response = await lawyerApi.getById(lawyerId);
+      if (response.data) {
+        const data = response.data;
+        if (data.accountStatus !== "ACTIVE") {
+          throw new Error("This lawyer profile is not available");
+        }
+        setLawyer(data);
+      } else {
+        if (response.error?.includes("404") || response.error?.includes("not found")) {
           throw new Error("Lawyer not found");
         }
-        throw new Error("Failed to fetch lawyer details");
+        throw new Error(response.error || "Failed to fetch lawyer details");
       }
-      const data = await response.json();
-
-      if (data.accountStatus !== "ACTIVE") {
-        throw new Error("This lawyer profile is not available");
-      }
-
-      setLawyer(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
     }
@@ -157,12 +154,12 @@ const LawyerDetailPage = () => {
 
   const fetchServices = async () => {
     try {
-      const response = await fetch(API_SERVICE);
-      if (!response.ok) {
-        throw new Error("Failed to fetch services");
+      const response = await serviceApi.getAll();
+      if (response.data) {
+        setServices(response.data);
+      } else {
+        console.error("Failed to fetch services:", response.error);
       }
-      const data = await response.json();
-      setServices(data);
     } catch (err) {
       console.error("Failed to fetch services:", err);
     }

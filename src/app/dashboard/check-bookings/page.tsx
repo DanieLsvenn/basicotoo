@@ -8,6 +8,7 @@ import { Calendar, Clock, User, CheckCircle, LogOut } from "lucide-react";
 import { toast } from "sonner";
 import Cookies from "js-cookie";
 import { MaxWidthWrapper } from "@/components/max-width-wrapper";
+import { apiFetch, API_ENDPOINTS } from "@/lib/api-utils";
 
 // Booking type
 interface Booking {
@@ -47,19 +48,14 @@ export default function CheckBookings() {
   const fetchBookings = async () => {
     setLoading(true);
     try {
-      const token = Cookies.get("authToken");
       const status = tab === "checkin" ? "Paid" : "CheckedIn";
-      const res = await fetch(
-        `https://localhost:7286/api/Booking/staff?status=${status}&bookingDate=${date}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      if (!res.ok) {
-        toast.error("Failed to fetch bookings");
+      const response = await apiFetch(API_ENDPOINTS.BOOKING.BY_STAFF(status, date));
+      if (!response.data) {
+        toast.error(response.error || "Failed to fetch bookings");
         setBookings([]);
         return;
       }
-      const data = await res.json();
-      setBookings(data);
+      setBookings(response.data);
     } catch (error) {
       toast.error("Failed to fetch bookings");
       setBookings([]);
@@ -76,21 +72,14 @@ export default function CheckBookings() {
   // Check-in booking
   const handleCheckIn = async (bookingId: string) => {
     try {
-      const token = Cookies.get("authToken");
-      const response = await fetch(
-        `https://localhost:7286/api/Booking/check-in/${bookingId}`,
-        {
-          method: "PUT",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-      if (response.ok) {
+      const response = await apiFetch(API_ENDPOINTS.BOOKING.CHECK_IN(bookingId), {
+        method: "PUT",
+      });
+      if (response.data) {
         toast.success("Checked in successfully");
         fetchBookings();
       } else {
-        toast.error("Failed to check in");
+        toast.error(response.error || "Failed to check in");
       }
     } catch (error) {
       toast.error("Failed to check in");
@@ -100,21 +89,14 @@ export default function CheckBookings() {
   // Check-out booking
   const handleCheckOut = async (bookingId: string) => {
     try {
-      const token = Cookies.get("authToken");
-      const response = await fetch(
-        `https://localhost:7286/api/Booking/check-out/${bookingId}`,
-        {
-          method: "PUT",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-      if (response.ok) {
+      const response = await apiFetch(API_ENDPOINTS.BOOKING.CHECK_OUT(bookingId), {
+        method: "PUT",
+      });
+      if (response.data) {
         toast.success("Checked out successfully");
         fetchBookings();
       } else {
-        toast.error("Failed to check out");
+        toast.error(response.error || "Failed to check out");
       }
     } catch (error) {
       toast.error("Failed to check out");

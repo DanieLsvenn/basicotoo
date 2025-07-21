@@ -39,50 +39,50 @@ const VNP_RESPONSE_CODES: Record<string, string> = {
 
 // VNPay transaction status mapping
 const VNP_TRANSACTION_STATUS: Record<string, string> = {
-  "00": "Thành công",
-  "01": "Chưa hoàn thành",
-  "02": "Lỗi",
-  "04": "Đảo ngược",
-  "05": "Đang xử lý",
-  "06": "Đã trả về",
-  "07": "Nghi ngờ gian lận",
-  "09": "Giao dịch refund thành công"
+  "00": "Success",
+  "01": "Incomplete",
+  "02": "Error",
+  "04": "Reversed",
+  "05": "Processing",
+  "06": "Returned",
+  "07": "Fraud suspected",
+  "09": "Refund transaction successful"
 };
 
 // Bank code mapping
 const BANK_CODES: Record<string, string> = {
-  "NCB": "Ngân hàng NCB",
-  "AGRIBANK": "Ngân hàng Agribank",
-  "SCB": "Ngân hàng SCB",
-  "SACOMBANK": "Ngân hàng SacomBank",
-  "EXIMBANK": "Ngân hàng EximBank",
-  "MSBANK": "Ngân hàng MSBANK",
-  "NAMABANK": "Ngân hàng NamABank",
-  "VNMART": "Ví điện tử VnMart",
-  "VIETINBANK": "Ngân hàng Vietinbank",
-  "VIETCOMBANK": "Ngân hàng VCB",
-  "HDBANK": "Ngân hàng HDBank",
-  "DONGABANK": "Ngân hàng Dong A",
-  "TPBANK": "Ngân hàng TPBank",
-  "OJB": "Ngân hàng OceanBank",
-  "BIDV": "Ngân hàng BIDV",
-  "TECHCOMBANK": "Ngân hàng Techcombank",
-  "VPBANK": "Ngân hàng VPBank",
-  "MBBANK": "Ngân hàng MBBank",
-  "ACB": "Ngân hàng ACB",
-  "OCB": "Ngân hàng OCB",
-  "IVB": "Ngân hàng IVB",
-  "VISA": "Thẻ quốc tế"
+  "NCB": "NCB Bank",
+  "AGRIBANK": "Agribank",
+  "SCB": "SCB Bank",
+  "SACOMBANK": "SacomBank",
+  "EXIMBANK": "EximBank",
+  "MSBANK": "MSBank",
+  "NAMABANK": "NamABank",
+  "VNMART": "VnMart E-wallet",
+  "VIETINBANK": "VietinBank",
+  "VIETCOMBANK": "Vietcombank (VCB)",
+  "HDBANK": "HDBank",
+  "DONGABANK": "Dong A Bank",
+  "TPBANK": "TPBank",
+  "OJB": "OceanBank",
+  "BIDV": "BIDV Bank",
+  "TECHCOMBANK": "Techcombank",
+  "VPBANK": "VPBank",
+  "MBBANK": "MBBank",
+  "ACB": "ACB Bank",
+  "OCB": "OCB Bank",
+  "IVB": "IVB Bank",
+  "VISA": "International Card"
 };
 
 // Card type mapping
 const CARD_TYPES: Record<string, string> = {
-  "ATM": "Thẻ ATM nội địa",
-  "VISA": "Thẻ thanh toán quốc tế",
-  "MASTERCARD": "Thẻ thanh toán quốc tế",
-  "JCB": "Thẻ thanh toán quốc tế",
-  "UPI": "Thanh toán UPI",
-  "QRCODE": "Thanh toán QR Code"
+  "ATM": "Domestic ATM Card",
+  "VISA": "International Payment Card",
+  "MASTERCARD": "International Payment Card",
+  "JCB": "International Payment Card",
+  "UPI": "UPI Payment",
+  "QRCODE": "QR Code Payment"
 };
 
 interface VNPayParams {
@@ -522,9 +522,17 @@ export default function PaymentPage() {
           </Button>
           
           {isSuccess ? (
-            <Button onClick={handleGoToServices} className="flex items-center gap-2">
-              Continue Shopping
-            </Button>
+            type === "BOOKING" ? (
+              <Button onClick={handleGoToServices} className="flex items-center gap-2">
+                <Building className="h-4 w-4" />
+                Continue to Services
+              </Button>
+            ) : (
+              <Button onClick={handleGoToBuyTickets} className="flex items-center gap-2">
+                <Building className="h-4 w-4" />
+                Continue to Buy Tickets
+              </Button>
+            )
           ) : (
             <Button onClick={type === "BOOKING" ? handleGoToServices : handleGoToBuyTickets}>
               Try Again

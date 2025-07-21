@@ -110,6 +110,7 @@ export default function ProfilePage() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [stats, setStats] = useState<ProfileStats | null>(null);
+  const [isLoadingStats, setIsLoadingStats] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setSaving] = useState(false);
@@ -196,15 +197,54 @@ export default function ProfilePage() {
     }
   };
 
-  const fetchStats = async () => {
-    // Mock stats - replace with actual API call
-    setStats({
-      totalBookings: 12,
-      activeTickets: 25,
-      completedBookings: 8,
-      memberSince: "January 2024",
-    });
-  };
+  const fetchStats = useCallback(async () => {
+    if (!profile?.accountId) return;
+
+    setIsLoadingStats(true);
+    try {
+      // Fetch all booking statuses in parallel
+      const [pendingResponse, paidResponse, completedResponse] = await Promise.all([
+        bookingApi.getByCustomer(profile.accountId, "Pending"),
+        bookingApi.getByCustomer(profile.accountId, "Paid"), 
+        bookingApi.getByCustomer(profile.accountId, "Completed")
+      ]);
+
+      // Calculate total bookings
+      const pendingCount = pendingResponse.data ? pendingResponse.data.length : 0;
+      const paidCount = paidResponse.data ? paidResponse.data.length : 0;
+      const completedCount = completedResponse.data ? completedResponse.data.length : 0;
+      const totalBookings = pendingCount + paidCount + completedCount;
+
+      // Fetch tickets to count active ones
+      const ticketsResponse = await ticketApi.getByCustomer(profile.accountId);
+      const activeTicketsCount = ticketsResponse.data ? 
+        ticketsResponse.data.filter((ticket: Ticket) => ticket.status === "InProgress").length : 0;
+
+      // Set the calculated stats
+      setStats({
+        totalBookings,
+        activeTickets: activeTicketsCount,
+        completedBookings: completedCount,
+        memberSince: profile.createdAt ? 
+          new Date(profile.createdAt).toLocaleDateString('en-US', { 
+            year: 'numeric', 
+            month: 'long' 
+          }) : "January 2024",
+      });
+
+    } catch (error) {
+      console.error("Failed to fetch stats:", error);
+      // Fallback to default stats if API calls fail
+      setStats({
+        totalBookings: 0,
+        activeTickets: 0,
+        completedBookings: 0,
+        memberSince: "January 2024",
+      });
+    } finally {
+      setIsLoadingStats(false);
+    }
+  }, [profile?.accountId, profile?.createdAt]);
 
   const handleImageUpload = async (
     event: React.ChangeEvent<HTMLInputElement>
@@ -362,7 +402,9 @@ export default function ProfilePage() {
   const handleTicketSent = useCallback(() => {
     // Refresh tickets when a new ticket is sent
     fetchTickets();
-  }, []);
+    // Also refresh stats to update active tickets count
+    fetchStats();
+  }, [fetchStats]);
 
   // Memoized computed values
   const userInitials = useMemo(() => {
@@ -1314,6 +1356,13 @@ ${plainTextForFallback}
       return;
     }
 
+    if (profile.accountTicketRequest <= 0) {
+      toast.error("No tickets available", {
+        description: "You need to purchase more tickets to send support requests.",
+      });
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -1326,12 +1375,20 @@ ${plainTextForFallback}
 
       if (response.data) {
         toast.success("Ticket sent successfully", {
-          description: "Staff will respond to your request soon.",
+          description: `Staff will respond to your request soon. Remaining tickets: ${profile.accountTicketRequest - 1}`,
         });
 
         setContent("");
         if (services.length > 0) {
           setSelectedServiceId(services[0].serviceId);
+        }
+
+        // Update profile to decrease available tickets
+        if (profile && profile.accountTicketRequest > 0) {
+          setProfile(prev => prev ? {
+            ...prev,
+            accountTicketRequest: prev.accountTicketRequest - 1
+          } : null);
         }
 
         // Refresh tickets after successful submission
@@ -1360,8 +1417,14 @@ ${plainTextForFallback}
   // Fetch profile and stats on initial load
   useEffect(() => {
     fetchProfile();
-    fetchStats();
   }, []);
+
+  // Fetch stats when profile is available
+  useEffect(() => {
+    if (profile?.accountId) {
+      fetchStats();
+    }
+  }, [profile?.accountId, fetchStats]);
 
   // Fetch tickets when profile.accountId is available
   useEffect(() => {
@@ -1580,7 +1643,23 @@ ${plainTextForFallback}
             </Card>
 
             {/* Stats Cards */}
-            {stats && (
+            {isLoadingStats ? (
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                {[1, 2, 3, 4].map((i) => (
+                  <Card key={i}>
+                    <CardContent className="pt-6">
+                      <div className="flex items-center space-x-2">
+                        <div className="h-8 w-8 bg-gray-200 rounded animate-pulse" />
+                        <div>
+                          <div className="h-6 w-12 bg-gray-200 rounded animate-pulse mb-1" />
+                          <div className="h-4 w-20 bg-gray-200 rounded animate-pulse" />
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            ) : stats && (
               <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                 <Card>
                   <CardContent className="pt-6">
@@ -1639,7 +1718,7 @@ ${plainTextForFallback}
                           {stats.completedBookings}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          Completed
+                          Completed bookings
                         </p>
                       </div>
                     </div>
@@ -1991,11 +2070,39 @@ ${plainTextForFallback}
                 <CardContent>
                   <div className="space-y-4">
                     {profile && (
-                      <div className="text-sm text-muted-foreground p-3 border rounded-md bg-muted/50">
-                        Logged in as:{" "}
-                        <span className="font-medium">{profile.fullName}</span> (
-                        {profile.username})
-                      </div>
+                      <>
+                        <div className="text-sm text-muted-foreground p-3 border rounded-md bg-muted/50">
+                          Logged in as:{" "}
+                          <span className="font-medium">{profile.fullName}</span> (
+                          {profile.username})
+                        </div>
+                        
+                        <div className={`text-sm p-3 border rounded-md transition-all duration-300 ${
+                          profile.accountTicketRequest > 0 
+                            ? 'bg-green-50 border-green-200 text-green-700' 
+                            : 'bg-red-50 border-red-200 text-red-700'
+                        }`}>
+                          <div className="flex items-center gap-2">
+                            <Ticket className="h-4 w-4" />
+                            <span className="font-medium">
+                              Available Tickets: 
+                              <span className="ml-1 inline-block transition-all duration-300 hover:scale-110">
+                                {profile.accountTicketRequest}
+                              </span>
+                            </span>
+                          </div>
+                          {profile.accountTicketRequest === 0 && (
+                            <p className="text-xs mt-1">
+                              You need to purchase tickets to send support requests.
+                            </p>
+                          )}
+                          {profile.accountTicketRequest > 0 && profile.accountTicketRequest <= 3 && (
+                            <p className="text-xs mt-1">
+                              Low ticket count! Consider purchasing more tickets.
+                            </p>
+                          )}
+                        </div>
+                      </>
                     )}
 
                     {isLoadingServices ? (
@@ -2057,10 +2164,11 @@ ${plainTextForFallback}
                             isSubmitting ||
                             !selectedServiceId ||
                             services.length === 0 ||
-                            !profile
+                            !profile ||
+                            profile.accountTicketRequest <= 0
                           }
                         >
-                          {isSubmitting ? "Sending..." : "Send Request"}
+                          {isSubmitting ? "Sending..." : profile?.accountTicketRequest === 0 ? "No Tickets Available" : "Send Request (1 ticket)"}
                         </Button>
                       </form>
                     )}
@@ -2075,7 +2183,10 @@ ${plainTextForFallback}
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={fetchTickets}
+                    onClick={() => {
+                      fetchTickets();
+                      fetchStats(); // Refresh stats when tickets are refreshed
+                    }}
                     disabled={isLoadingTickets}
                   >
                     {isLoadingTickets ? (
@@ -2173,6 +2284,7 @@ ${plainTextForFallback}
                     onClick={() => {
                       fetchBookingsPending();
                       fetchBookingsPaid();
+                      fetchStats(); // Refresh stats when bookings are refreshed
                     }}
                     disabled={isLoadingBookingsPending || isLoadingBookingsPaid}
                   >
